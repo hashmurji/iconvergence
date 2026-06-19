@@ -1499,10 +1499,8 @@ const WithdrawalsPage=()=>{
   const pendingCount=requests.filter(r=>(statusMap[r.id]||r.status)==="Pending").length;
 
   const exportCSV=()=>{
-    const header="Request ID,Date,Client ID,Client Name,Type,Amount,CCY,Notes,Status
-";
-    const rows=requests.map(r=>[r.id,r.date,r.clientId,r.clientName,r.type,r.amount,r.ccy,(r.notes||"").replace(/,/g,";"),statusMap[r.id]||r.status].join(",")).join("
-");
+    const header="Request ID,Date,Client ID,Client Name,Type,Amount,CCY,Notes,Status\n";
+    const rows=requests.map(r=>[r.id,r.date,r.clientId,r.clientName,r.type,r.amount,r.ccy,(r.notes||"").replace(/,/g,";"),statusMap[r.id]||r.status].join(",")).join("\n");
     const blob=new Blob([header+rows],{type:"text/csv"});
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="i-convergence-withdrawals.csv";a.click();
   };
