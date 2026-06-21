@@ -110,10 +110,22 @@ const saveRequests = async (requests) => { _setStore(requests); };
 
 // ─── CLIENT DATA ─────────────────────────────────────────────────────
 const CLIENTS = [
-  { id:"C00355633",code:"355633-Lightfoot",name:"Michael Lightfoot",email:"Michael@i-FSC.com",address:"1 New Lane",jurisdiction:"US",verified:true,phone:"+1 212 555 0147",joined:"2020-10-01" },
-  { id:"C00356735",code:"356735-Starkie",name:"Lyndsey Starkie",email:"Lyndsey@i-FSC.com",address:"25 Gary Close",jurisdiction:"US",verified:true,phone:"+1 646 555 0293",joined:"2021-02-15" },
-  { id:"C00355634",code:"355634-Pauls",name:"Chris Pauls",email:"Chris@i-FSC.com",address:"23 High Street",jurisdiction:"US",verified:true,phone:"+1 212 555 0381",joined:"2020-10-01" },
-  { id:"C00347223",code:"347223-Murji",name:"Hash Murji",email:"Hash@i-FSC.com",address:"8 Elm Gardens",jurisdiction:"US",verified:true,phone:"+1 917 555 0562",joined:"2020-09-01" },
+  { id:"C00355633",code:"355633-Lightfoot",name:"Michael Lightfoot",email:"Michael@i-FSC.com",address:"1 New Lane",jurisdiction:"US",verified:true,phone:"+1 212 555 0147",joined:"2020-10-01",
+    riskScore:6,riskLabel:"Balanced Growth",mandate:"Multi-asset diversified. Max 70% equity. No single stock >10%. Min 20% fixed income.",
+    maxEquityPct:70,maxSinglePct:10,minFixedIncomePct:20,targetCash:10,
+    nextReview:"2025-01-15",lastReview:"2024-01-15",suitabilityDate:"2024-01-15" },
+  { id:"C00356735",code:"356735-Starkie",name:"Lyndsey Starkie",email:"Lyndsey@i-FSC.com",address:"25 Gary Close",jurisdiction:"US",verified:true,phone:"+1 646 555 0293",joined:"2021-02-15",
+    riskScore:5,riskLabel:"Moderate",mandate:"Conservative multi-asset. Max 60% equity. Max 50% in any single geography. Min 25% fixed income.",
+    maxEquityPct:60,maxSinglePct:15,minFixedIncomePct:25,targetCash:15,
+    nextReview:"2025-02-15",lastReview:"2024-02-15",suitabilityDate:"2024-02-15" },
+  { id:"C00355634",code:"355634-Pauls",name:"Chris Pauls",email:"Chris@i-FSC.com",address:"23 High Street",jurisdiction:"US",verified:true,phone:"+1 212 555 0381",joined:"2020-10-01",
+    riskScore:7,riskLabel:"Growth",mandate:"Growth-oriented. Max 80% equity. Thematic and factor ETFs permitted. Min 15% fixed income.",
+    maxEquityPct:80,maxSinglePct:15,minFixedIncomePct:15,targetCash:5,
+    nextReview:"2025-01-10",lastReview:"2024-01-10",suitabilityDate:"2024-01-10" },
+  { id:"C00347223",code:"347223-Murji",name:"Hash Murji",email:"Hash@i-FSC.com",address:"8 Elm Gardens",jurisdiction:"US",verified:true,phone:"+1 917 555 0562",joined:"2020-09-01",
+    riskScore:8,riskLabel:"Aggressive Growth",mandate:"High-conviction multi-asset. Max 85% equity. Global mandate. Min 10% fixed income. Cash may be held tactically.",
+    maxEquityPct:85,maxSinglePct:20,minFixedIncomePct:10,targetCash:5,
+    nextReview:"2025-03-01",lastReview:"2024-03-01",suitabilityDate:"2024-03-01" },
 ];
 
 const HOLDINGS = {
@@ -237,6 +249,83 @@ const MARKET_DATA = {
     {title:"GBP Strength",body:"Sterling at 14-month high vs EUR. GBP-hedged products (GSPX, IJPH) benefiting. Watch GBPUSD at 1.27 resistance."},
     {title:"EM Revival",body:"China stimulus driving EM rally. EMIM and VAPX seeing strong momentum. Risk-on sentiment building in Asia."},
     {title:"Gold Breakout",body:"IAU above $38 on Fed pivot hopes and geopolitical demand. Technical breakout with $40 target in view."},
+  ],
+};
+
+
+// ─── RISK PROFILES ────────────────────────────────────────────────
+const RISK_LABELS = {1:"Very Conservative",2:"Conservative",3:"Cautious",4:"Cautious-Moderate",5:"Moderate",6:"Moderate-Growth",7:"Growth",8:"Aggressive Growth",9:"Aggressive",10:"Speculative"};
+const RISK_COLOURS = {1:"#065F46",2:"#047857",3:"#059669",4:"#10B981",5:"#6EE7B7",6:"#F59E0B",7:"#D97706",8:"#EA580C",9:"#DC2626",10:"#991B1B"};
+
+// Asset class classification for each ticker
+const ASSET_CLASS = {
+  "VTI":"Equity","VWO":"Equity","VPL":"Equity","DBEU":"Equity","ARKK":"Equity","VYM":"Equity","LGLV":"Equity",
+  "GSPX":"Equity","EMIM":"Equity","EUXS":"Equity","VAPX":"Equity","CUKX":"Equity","IJPH":"Equity",
+  "VCSH":"Fixed Income","BNDX":"Fixed Income","SCHP":"Fixed Income","SCHO":"Fixed Income","ERNS":"Fixed Income",
+  "IS15":"Fixed Income","GILS":"Fixed Income","AGBP":"Fixed Income","XGIG":"Fixed Income","VGOV":"Fixed Income",
+  "IAU":"Commodity","SGOV":"Cash Equivalent","CSH2":"Cash Equivalent",
+  "CASH-USD":"Cash","CASH-GBP":"Cash","Cash-USD":"Cash","Cash-GBP":"Cash",
+};
+
+// Risk score maps to max equity %, max single position %, mandate
+const RISK_MANDATES = {
+  1:{maxEquity:10,maxSingle:5,maxAlt:0,label:"Capital Preservation"},
+  2:{maxEquity:20,maxSingle:8,maxAlt:5,label:"Income"},
+  3:{maxEquity:30,maxSingle:10,maxAlt:5,label:"Cautious Income"},
+  4:{maxEquity:45,maxSingle:12,maxAlt:10,label:"Balanced Income"},
+  5:{maxEquity:55,maxSingle:15,maxAlt:10,label:"Balanced"},
+  6:{maxEquity:65,maxSingle:18,maxAlt:15,label:"Balanced Growth"},
+  7:{maxEquity:75,maxSingle:20,maxAlt:15,label:"Growth"},
+  8:{maxEquity:85,maxSingle:25,maxAlt:20,label:"Aggressive Growth"},
+  9:{maxEquity:95,maxSingle:30,maxAlt:25,label:"Aggressive"},
+  10:{maxEquity:100,maxSingle:50,maxAlt:40,label:"Speculative"},
+};
+
+// Default risk profiles per client (editable in UI)
+const DEFAULT_RISK_PROFILES = {
+  "C00355633":{score:6,mandate:"Balanced Growth",notes:"Client comfortable with moderate equity exposure. Reviewed Feb 2024.",reviewed:"2024-02-15"},
+  "C00356735":{score:5,mandate:"Balanced",notes:"Conservative by nature, holds large cash buffer intentionally.",reviewed:"2024-02-20"},
+  "C00355634":{score:7,mandate:"Growth",notes:"Long investment horizon, tolerates higher volatility. ARKK position agreed.",reviewed:"2024-01-05"},
+  "C00347223":{score:5,mandate:"Balanced",notes:"High cash position reflects pending property purchase. Equity sleeve managed to balanced mandate.",reviewed:"2024-04-01"},
+};
+
+// Target model portfolio allocations by risk score
+const MODEL_ALLOCATIONS = {
+  5:{equity:55,fixedIncome:30,cashEq:5,cash:10},
+  6:{equity:65,fixedIncome:25,cashEq:5,cash:5},
+  7:{equity:75,fixedIncome:18,cashEq:2,cash:5},
+};
+
+// ─── ALERTS DATA ───────────────────────────────────────────────────
+const DEFAULT_ALERTS = [
+  {id:1,clientId:"C00347223",clientName:"Hash Murji",type:"concentration",ticker:"GSPX",message:"GSPX represents >18% of total portfolio — above the Balanced mandate single-position limit of 15%.",severity:"warning",date:"2024-04-02",read:false},
+  {id:2,clientId:"C00356735",clientName:"Lyndsey Starkie",type:"concentration",ticker:"CASH-GBP",message:"Cash position (£646,744) represents 53% of portfolio — significantly above the Balanced mandate cash limit.",severity:"warning",date:"2024-04-02",read:false},
+  {id:3,clientId:"C00347223",clientName:"Hash Murji",type:"drift",ticker:"portfolio",message:"Equity allocation (14.8%) is below the Balanced mandate target range (45-65%). Portfolio requires rebalancing.",severity:"error",date:"2024-04-01",read:false},
+  {id:4,clientId:"C00355633",clientName:"Michael Lightfoot",type:"pl",ticker:"DBEU",message:"DBEU unrealised loss of -$2,406 (-5.8%) — exceeds the 5% single-position drawdown alert threshold.",severity:"info",date:"2024-03-28",read:true},
+  {id:5,clientId:"C00355634",clientName:"Chris Pauls",type:"pl",ticker:"VTI",message:"VTI unrealised loss of -$6,085 (-9.7%) — largest detractor in portfolio.",severity:"info",date:"2024-03-25",read:true},
+];
+
+// ─── DOCUMENT VAULT DATA ───────────────────────────────────────────
+const DEFAULT_DOCS = {
+  "C00355633":[
+    {id:"d1",name:"Suitability Letter 2024.pdf",type:"Suitability",date:"2024-02-15",size:"142 KB",uploader:"Sarah Johnson"},
+    {id:"d2",name:"KYC Pack - Lightfoot.pdf",type:"KYC",date:"2020-10-01",size:"2.4 MB",uploader:"Admin"},
+    {id:"d3",name:"Investment Mandate 2023.pdf",type:"Mandate",date:"2023-01-10",size:"98 KB",uploader:"James White"},
+  ],
+  "C00356735":[
+    {id:"d4",name:"Suitability Letter 2024.pdf",type:"Suitability",date:"2024-02-20",size:"138 KB",uploader:"James White"},
+    {id:"d5",name:"KYC Pack - Starkie.pdf",type:"KYC",date:"2021-02-15",size:"1.9 MB",uploader:"Admin"},
+  ],
+  "C00355634":[
+    {id:"d6",name:"Suitability Letter 2024.pdf",type:"Suitability",date:"2024-01-05",size:"155 KB",uploader:"Sarah Johnson"},
+    {id:"d7",name:"KYC Pack - Pauls.pdf",type:"KYC",date:"2020-10-01",size:"2.1 MB",uploader:"Admin"},
+    {id:"d8",name:"ARKK Risk Acknowledgement.pdf",type:"Risk Disclosure",date:"2024-01-05",size:"44 KB",uploader:"James White"},
+  ],
+  "C00347223":[
+    {id:"d9",name:"Suitability Letter 2024.pdf",type:"Suitability",date:"2024-04-01",size:"162 KB",uploader:"James White"},
+    {id:"d10",name:"KYC Pack - Murji.pdf",type:"KYC",date:"2020-09-01",size:"3.2 MB",uploader:"Admin"},
+    {id:"d11",name:"Investment Mandate 2024.pdf",type:"Mandate",date:"2024-01-01",size:"112 KB",uploader:"James White"},
+    {id:"d12",name:"Withdrawal Auth Form.pdf",type:"Authorisation",date:"2024-03-15",size:"67 KB",uploader:"Admin"},
   ],
 };
 
@@ -398,9 +487,14 @@ const NAV_ITEMS=[
   {key:"dashboard",label:"Dashboard",icon:"⊞"},
   {key:"clients",label:"Clients",icon:"👥"},
   {key:"transactions",label:"Txns",icon:"⇄"},
-  {key:"pricing",label:"Pricing",icon:"◈"},
   {key:"valuations",label:"Valuations",icon:"◎"},
+  {key:"ai",label:"AI Insights",icon:"✦"},
+  {key:"risk",label:"Risk",icon:"⚖"},
+  {key:"rebalance",label:"Rebalance",icon:"⇌"},
+  {key:"alerts",label:"Alerts",icon:"🔔"},
+  {key:"docs",label:"Docs",icon:"📁"},
   {key:"withdrawals",label:"Withdrawals",icon:"↓"},
+  {key:"pricing",label:"Pricing",icon:"◈"},
   {key:"news",label:"News",icon:"📡"},
   {key:"connect",label:"Connect",icon:"⚡"},
 ];
@@ -459,7 +553,7 @@ const Nav=({section,setSection,selectedCcy,setCcy})=>{
       )}
       {isMobile&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.navy,borderTop:`1px solid rgba(0,184,176,0.2)`,display:"flex",zIndex:150,height:60}}>
-          {[...NAV_ITEMS.slice(0,3),NAV_ITEMS.find(i=>i.key==="withdrawals")].filter(Boolean).map(i=>(
+          {[...NAV_ITEMS.slice(0,3),NAV_ITEMS.find(i=>i.key==="ai")].filter(Boolean).map(i=>(
             <button key={i.key} onClick={()=>handleNav(i.key)} style={{flex:1,background:section===i.key?"rgba(0,184,176,0.1)":"none",border:"none",borderTop:section===i.key?`2px solid ${C.teal}`:"2px solid transparent",color:section===i.key?C.teal:"rgba(255,255,255,0.45)",fontSize:9,fontWeight:section===i.key?600:400,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,fontFamily:"'Inter',sans-serif",padding:"4px 0",transition:"all 0.15s"}}>
               <span style={{fontSize:19,lineHeight:1}}>{i.icon}</span>
               <span>{i.label}</span>
@@ -504,7 +598,7 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:isMobile?8:10,width:isMobile?"100%":"auto"}}>
           <StatCard label="Active clients" value="4" dark/>
           <StatCard label="Avg. return" value={pct(calcPct(CLIENTS.reduce((s,c)=>s+clientTotals(c.id,selectedCcy).totalCost,0),totalAUM))} sub="across all clients" trend={totalPL>=0?"up":"down"} dark/>
-          <StatCard label="Total AUM cost" value={`${sym}${fmt(CLIENTS.reduce((s,c)=>s+clientTotals(c.id,selectedCcy).totalCost,0),0)}`} sub="inception value" dark/>
+          <StatCard label="Open alerts" value={DEFAULT_ALERTS.filter(a=>!a.read).length} sub={`${DEFAULT_ALERTS.filter(a=>a.severity==="error").length} critical`} trend={DEFAULT_ALERTS.filter(a=>a.severity==="error").length>0?"down":"up"} dark/>
           <StatCard label="Compliance" value="100%" sub="4/4 verified" trend="up" dark/>
         </div>
       </div>
@@ -531,6 +625,27 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
             </div>
           );
         })}
+      </div>
+
+      {/* Feature shortcuts */}
+      <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:2,textTransform:"uppercase",marginBottom:10,marginTop:4}}>Quick access</div>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:isMobile?8:10,marginBottom:14}}>
+        {[
+          {key:"ai",icon:"✦",label:"AI Insights",desc:"Market intelligence & portfolio analysis",color:C.teal},
+          {key:"risk",icon:"⚖",label:"Risk & suitability",desc:"Mandates, scores, compliance flags",color:C.navyLight},
+          {key:"rebalance",icon:"⇌",label:"Rebalancing",desc:"Drift analysis & trade suggestions",color:C.gold},
+          {key:"alerts",icon:"🔔",label:"Alerts",desc:`${DEFAULT_ALERTS.filter(a=>!a.read).length} unread alerts`,color:DEFAULT_ALERTS.filter(a=>!a.read).length>0?C.red:C.green},
+        ].map(f=>(
+          <div key={f.key} onClick={()=>setSection(f.key)} style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,padding:isMobile?12:16,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=C.teal}
+            onMouseLeave={e=>e.currentTarget.style.borderColor=C.silver}>
+            <span style={{fontSize:20,width:28,textAlign:"center",flexShrink:0,color:f.color}}>{f.icon}</span>
+            <div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:13,fontWeight:600,color:C.navy,marginBottom:2}}>{f.label}</div>
+              <div style={{fontSize:11,color:C.faint,lineHeight:1.4}}>{f.desc}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:isMobile?10:14,marginBottom:14}}>
@@ -679,10 +794,10 @@ const ClientDetail=({clientId,onBack,selectedCcy})=>{
         <StatCard label="Total txns" value={clientTxns.length.toLocaleString()} sub={`${equityH.length} holdings`}/>
       </div>
 
-      <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.silver}`,marginBottom:18}}>
-        {["valuation","transactions","crm"].map(t=>(
-          <button key={t} onClick={()=>setTab(t)} style={{background:"none",border:"none",borderBottom:tab===t?`2px solid ${C.teal}`:"2px solid transparent",color:tab===t?C.teal:C.faint,fontSize:13,fontWeight:tab===t?600:400,cursor:"pointer",padding:"9px 16px",marginBottom:-1,textTransform:"capitalize"}}>
-            {t==="crm"?"CRM":t.charAt(0).toUpperCase()+t.slice(1)}
+      <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.silver}`,marginBottom:18,overflowX:"auto"}}>
+        {[["valuation","Valuation"],["transactions","Transactions"],["crm","CRM"],["risk","Risk"],["docs","Documents"]].map(([key,label])=>(
+          <button key={key} onClick={()=>setTab(key)} style={{background:"none",border:"none",borderBottom:tab===key?`2px solid ${C.teal}`:"2px solid transparent",color:tab===key?C.teal:C.faint,fontSize:13,fontWeight:tab===key?600:400,cursor:"pointer",padding:"9px 16px",marginBottom:-1,whiteSpace:"nowrap"}}>
+            {label}
           </button>
         ))}
       </div>
@@ -847,6 +962,74 @@ const ClientDetail=({clientId,onBack,selectedCcy})=>{
           </div>
         </div>
       )}
+
+      {/* ── RISK TAB ── */}
+      {tab==="risk"&&(()=>{
+        const profile=DEFAULT_RISK_PROFILES[clientId];
+        const comp=computeCompliance(clientId,DEFAULT_RISK_PROFILES);
+        const mandate=RISK_MANDATES[(profile && profile.score) || 5];
+        return(
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:14}}>
+              <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,padding:18}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:14}}>Risk profile</div>
+                <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
+                  <div style={{background:RISK_COLOURS[(profile && profile.score) || 5],color:C.white,fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:28,width:52,height:52,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}>{(profile && profile.score) || 5}</div>
+                  <div>
+                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:16,fontWeight:600,color:C.navy}}>{RISK_LABELS[(profile && profile.score) || 5]}</div>
+                    <div style={{fontSize:12,color:C.faint}}>{mandate.label} mandate</div>
+                  </div>
+                </div>
+                {[["Max equity",mandate.maxEquity+"%"],["Max single pos.",mandate.maxSingle+"%"],["Last reviewed",(profile && profile.reviewed) || "—"]].map(([l,v])=>(
+                  <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`0.5px solid ${C.silver}`}}>
+                    <span style={{fontSize:12,color:C.faint}}>{l}</span><span style={{fontSize:12,fontWeight:600,color:C.navy}}>{v}</span>
+                  </div>
+                ))}
+                <div style={{marginTop:10,fontSize:12,color:C.text,lineHeight:1.6,fontStyle:"italic"}}>{(profile && profile.notes) || "No suitability notes recorded."}</div>
+              </div>
+              <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,padding:18}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:14}}>Compliance flags</div>
+                {(comp && comp.flags && comp.flags.length===0)?(
+                  <div style={{color:C.green,fontSize:13,fontWeight:500,display:"flex",gap:6,alignItems:"center"}}><span>✓</span><span>No breaches detected</span></div>
+                ):(comp && comp.flags ? comp.flags.map((f,i)=>(
+                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,padding:"8px 10px",background:f.type==="error"?C.redBg:C.amberBg,borderRadius:6}}>
+                    <span style={{flexShrink:0}}>{f.type==="error"?"🔴":"🟡"}</span>
+                    <span style={{fontSize:12,color:C.text,lineHeight:1.5}}>{f.msg}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── DOCS TAB ── */}
+      {tab==="docs"&&(()=>{
+        const clientDocs=DEFAULT_DOCS[clientId]||[];
+        const typeColour={KYC:"navy","Suitability":"success","Mandate":"info","Risk Disclosure":"warning","Authorisation":"gold"};
+        const typeIcon={KYC:"🪪","Suitability":"✅","Mandate":"📋","Risk Disclosure":"⚠️","Authorisation":"✍️"};
+        return(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{clientDocs.length} documents</div>
+              <Btn small onClick={()=>{}}>+ Upload</Btn>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,1fr)",gap:10}}>
+              {clientDocs.map(doc=>(
+                <div key={doc.id} style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,padding:"14px 16px",display:"flex",gap:12,alignItems:"flex-start"}}>
+                  <span style={{fontSize:24,flexShrink:0}}>{typeIcon[doc.type]||"📄"}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,color:C.navy,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.name}</div>
+                    <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}><Badge color={typeColour[doc.type]||"info"}>{doc.type}</Badge></div>
+                    <div style={{fontSize:11,color:C.faint,marginTop:4}}>{doc.date} · {doc.size} · {doc.uploader}</div>
+                  </div>
+                  <Btn small variant="ghost">View</Btn>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── WITHDRAWAL REQUESTS PANEL (shown in valuation tab) ── */}
       {tab==="valuation"&&clientWdRequests.length>0&&(
@@ -1028,7 +1211,7 @@ const Transactions=({selectedCcy})=>{
 
   const addTxn=()=>{
     const client=CLIENTS.find(c=>c.id===newTxn.clientId);
-    setExtraTxns([{...newTxn,id:Date.now(),selector:"Cashflow",tradedate:new Date().toISOString().slice(0,10),settdate:new Date().toISOString().slice(0,10),clientName:client?.name||"",qty:parseFloat(newTxn.qty)||0,consideration:parseFloat(newTxn.consideration)||0,netamt:parseFloat(newTxn.netamt)||0,costprice:0,costvalue:0},...extraTxns]);
+    setExtraTxns([{...newTxn,id:Date.now(),selector:"Cashflow",tradedate:new Date().toISOString().slice(0,10),settdate:new Date().toISOString().slice(0,10),clientName:(client && client.name) || "",qty:parseFloat(newTxn.qty)||0,consideration:parseFloat(newTxn.consideration)||0,netamt:parseFloat(newTxn.netamt)||0,costprice:0,costvalue:0},...extraTxns]);
     setShowAdd(false);setNewTxn({clientId:"",txtype:"BUY",ticker:"",description:"",ccy:"USD",qty:"",consideration:"",netamt:""});
   };
 
@@ -1079,7 +1262,7 @@ const Transactions=({selectedCcy})=>{
             <tbody>
               {result.slice(0,600).map((t,i)=>{
                 const typeColor=t.txtype==="BUY"?"success":t.txtype==="SELL"?"error":t.txtype==="Dividend"?"gold":t.txtype.includes("Fee")||t.txtype==="SR Fee"?"warning":t.txtype==="Deposit"?"up":t.txtype==="Withdrawal"?"down":t.txtype.includes("FX")?"navy":"info";
-                const clientName=CLIENTS.find(c=>c.id===t.clientId)?.name.split(" ")[0]||t.clientId;
+                const clientName=(CLIENTS.find(c=>c.id===t.clientId)||{name:t.clientId}).name.split(' ')[0];
                 return(
                   <tr key={t.id||i} style={{borderBottom:`0.5px solid ${C.silver}`,background:i%2===0?C.white:"#FAFBFC"}}>
                     <td style={{padding:"6px 10px",color:C.text,whiteSpace:"nowrap"}}>{t.tradedate}</td>
@@ -1266,7 +1449,7 @@ const Valuations=({setSection,setSelectedClient,selectedCcy})=>{
       </div>
       <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Top positions (all clients)</div>
       <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:isMobile?8:9}}>
-        {Object.entries(HOLDINGS).flatMap(([cid,hs])=>hs.filter(h=>!h.isCash).map(h=>({...h,client:CLIENTS.find(c=>c.id===cid)?.name.split(" ")[0],convVal:convertAmount(h.value,h.ccy,selectedCcy)}))).sort((a,b)=>b.convVal-a.convVal).slice(0,8).map((h,i)=>(
+        {Object.entries(HOLDINGS).flatMap(([cid,hs])=>hs.filter(h=>!h.isCash).map(h=>({...h,client:(CLIENTS.find(c=>c.id===cid)||{name:cid}).name.split(' ')[0],convVal:convertAmount(h.value,h.ccy,selectedCcy)}))).sort((a,b)=>b.convVal-a.convVal).slice(0,8).map((h,i)=>(
           <div key={i} style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:8,padding:"13px 15px"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,color:C.navy,fontSize:14}}>{h.ticker}</span><Badge color={h.ccy==="GBP"?"navy":"info"}>{h.ccy}</Badge></div>
             <div style={{fontSize:11,color:C.faint,marginBottom:7,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</div>
@@ -1461,6 +1644,8 @@ const Connect=()=>{
   );
 };
 
+
+
 // ─── WITHDRAWALS PAGE ─────────────────────────────────────────────
 const WithdrawalsPage=()=>{
   const isMobile=useIsMobile();
@@ -1473,9 +1658,7 @@ const WithdrawalsPage=()=>{
   const [sheetId,setSheetId]=useState(SHEETS_CONFIG.SPREADSHEET_ID);
   const [apiKey,setApiKey]=useState(SHEETS_CONFIG.API_KEY);
 
-  useEffect(()=>{
-    loadRequests().then(r=>{setRequests(r);setLoading(false);});
-  },[]);
+  useEffect(()=>{ loadRequests().then(r=>{setRequests(r);setLoading(false);}); },[]);
 
   const syncStatuses=async()=>{
     setSyncing(true);
@@ -1499,8 +1682,9 @@ const WithdrawalsPage=()=>{
   const pendingCount=requests.filter(r=>(statusMap[r.id]||r.status)==="Pending").length;
 
   const exportCSV=()=>{
-    const header="Request ID,Date,Client ID,Client Name,Type,Amount,CCY,Notes,Status\n";
-    const rows=requests.map(r=>[r.id,r.date,r.clientId,r.clientName,r.type,r.amount,r.ccy,(r.notes||"").replace(/,/g,";"),statusMap[r.id]||r.status].join(",")).join("\n");
+    const nl="\n";
+    const header=`Request ID,Date,Client ID,Client Name,Type,Amount,CCY,Notes,Status${nl}`;
+    const rows=requests.map(r=>[r.id,r.date,r.clientId,r.clientName,r.type,r.amount,r.ccy,(r.notes||"").replace(/,/g,";"),statusMap[r.id]||r.status].join(",")).join(nl);
     const blob=new Blob([header+rows],{type:"text/csv"});
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="i-convergence-withdrawals.csv";a.click();
   };
@@ -1516,48 +1700,40 @@ const WithdrawalsPage=()=>{
           </div>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <Btn small variant="ghost" onClick={exportCSV}>↓ Export CSV</Btn>
-          <Btn small variant="secondary" onClick={()=>setShowSetup(true)}>⚙ Sheets setup</Btn>
-          <Btn small onClick={syncStatuses}>{syncing?"Syncing...":"⟳ Sync from Sheets"}</Btn>
+          <Btn small variant="ghost" onClick={exportCSV}>Export CSV</Btn>
+          <Btn small variant="secondary" onClick={()=>setShowSetup(true)}>Sheets setup</Btn>
+          <Btn small onClick={syncStatuses}>{syncing?"Syncing...":"Sync status"}</Btn>
         </div>
       </div>
 
-      {/* Config status banner */}
       {!sheetsConfigured()&&(
-        <div style={{background:C.amberBg,border:`1px solid ${C.gold}`,borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <div style={{background:C.amberBg,border:"1px solid "+C.gold,borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
           <div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:13,fontWeight:600,color:C.amber,marginBottom:3}}>⚠ Google Sheets not connected</div>
-            <div style={{fontSize:12,color:C.text,lineHeight:1.6}}>Withdrawal requests are saved locally. Connect Google Sheets so your back-office team sees requests in a live spreadsheet and can update statuses.</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:13,fontWeight:600,color:C.amber,marginBottom:3}}>Google Sheets not connected</div>
+            <div style={{fontSize:12,color:C.text,lineHeight:1.6}}>Requests saved locally. Connect Sheets so back-office sees live requests.</div>
           </div>
-          <Btn small variant="dark" onClick={()=>setShowSetup(true)}>Connect now →</Btn>
-        </div>
-      )}
-      {sheetsConfigured()&&(
-        <div style={{background:C.tealLight,border:`1px solid ${C.teal}`,borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:C.teal,flexShrink:0}}/>
-          <div style={{fontSize:13,color:C.tealMid}}>Connected to Google Sheets · Status updates sync when you click <strong>⟳ Sync</strong></div>
+          <Btn small variant="dark" onClick={()=>setShowSetup(true)}>Connect</Btn>
         </div>
       )}
 
-      {/* Filter tabs */}
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         {[["all","All"],["pending","Pending"],["actioned","Actioned"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setFilter(k)} style={{background:filter===k?C.navy:C.white,color:filter===k?C.white:C.text,border:`0.5px solid ${filter===k?C.navy:C.silver}`,borderRadius:6,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:filter===k?600:400}}>
-            {l}{k==="pending"&&pendingCount>0?` (${pendingCount})`:""}
+          <button key={k} onClick={()=>setFilter(k)} style={{background:filter===k?C.navy:C.white,color:filter===k?C.white:C.text,border:"0.5px solid "+(filter===k?C.navy:C.silver),borderRadius:6,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:filter===k?600:400}}>
+            {l}{k==="pending"&&pendingCount>0?" ("+pendingCount+")":""}
           </button>
         ))}
       </div>
 
       {loading?(
-        <div style={{padding:40,textAlign:"center",color:C.faint}}>Loading requests...</div>
+        <div style={{padding:40,textAlign:"center",color:C.faint}}>Loading...</div>
       ):filtered.length===0?(
-        <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,padding:40,textAlign:"center"}}>
-          <div style={{fontSize:32,marginBottom:12}}>↓</div>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:40,textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:12}}>&#8595;</div>
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:16,fontWeight:600,color:C.navy,marginBottom:6}}>No withdrawal requests</div>
-          <div style={{fontSize:13,color:C.faint}}>Requests submitted from client profiles will appear here.</div>
+          <div style={{fontSize:13,color:C.faint}}>Requests submitted from client profiles appear here.</div>
         </div>
       ):(
-        <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden"}}>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead><tr style={{background:C.navy}}>
@@ -1570,85 +1746,893 @@ const WithdrawalsPage=()=>{
                   const live=statusMap[r.id]||r.status;
                   const isActioned=live==="Actioned"||live==="Completed";
                   const isCancelled=live==="Cancelled";
-                  const isPending=!isActioned&&!isCancelled;
                   return(
-                    <tr key={r.id} style={{borderBottom:`0.5px solid ${C.silver}`,background:i%2===0?C.white:"#FAFBFC"}}>
+                    <tr key={r.id} style={{borderBottom:"0.5px solid "+C.silver,background:i%2===0?C.white:"#FAFBFC"}}>
                       <td style={{padding:"9px 14px",fontFamily:"monospace",fontSize:11,color:C.faint}}>{r.id}</td>
                       <td style={{padding:"9px 14px",color:C.text,whiteSpace:"nowrap"}}>{r.date}</td>
-                      <td style={{padding:"9px 14px",fontWeight:500,color:C.navy,whiteSpace:"nowrap"}}>{r.clientName}</td>
+                      <td style={{padding:"9px 14px",fontWeight:500,color:C.navy}}>{r.clientName}</td>
                       <td style={{padding:"9px 14px",fontWeight:600,color:C.navy}}>{r.type}</td>
                       <td style={{padding:"9px 14px",fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,color:C.navy,textAlign:"right"}}>
                         {r.ccy==="GBP"?"£":r.ccy==="EUR"?"€":r.ccy==="CNY"?"¥":"$"}{fmt(r.amount)}
                       </td>
                       <td style={{padding:"9px 14px"}}><Badge color={r.ccy==="GBP"?"navy":"info"}>{r.ccy}</Badge></td>
-                      <td style={{padding:"9px 14px",color:C.text,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.notes||"—"}</td>
-                      <td style={{padding:"9px 14px"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <Badge color={isActioned?"success":isCancelled?"error":"warning"}>
-                            {isActioned?"✓ Actioned":isCancelled?"Cancelled":"⏳ Pending"}
-                          </Badge>
-                          {isPending&&sheetsConfigured()&&<span style={{fontSize:10,color:C.faint}}>update in Sheets</span>}
-                        </div>
-                      </td>
+                      <td style={{padding:"9px 14px",color:C.text,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.notes||"—"}</td>
+                      <td style={{padding:"9px 14px"}}><Badge color={isActioned?"success":isCancelled?"error":"warning"}>{isActioned?"Actioned":isCancelled?"Cancelled":"Pending"}</Badge></td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-          <div style={{padding:"10px 14px",borderTop:`0.5px solid ${C.silver}`,background:"#FAFBFC",fontSize:11,color:C.faint}}>
-            {filtered.length} request{filtered.length!==1?"s":""} · To update a status, change the "Status" column in your Google Sheet, then click ⟳ Sync
+          <div style={{padding:"10px 14px",borderTop:"0.5px solid "+C.silver,fontSize:11,color:C.faint}}>
+            {filtered.length} request{filtered.length!==1?"s":""} · Update "Status" in Google Sheet then click Sync
           </div>
         </div>
       )}
 
-      {/* Google Sheets Setup Modal */}
       {showSetup&&(
-        <Modal title="Google Sheets setup" onClose={()=>setShowSetup(false)} wide>
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:20,marginBottom:20}}>
-            <div>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:C.navy,marginBottom:12}}>Step 1 — Create your spreadsheet</div>
-              <div style={{fontSize:12,color:C.text,lineHeight:1.8}}>
-                <div style={{marginBottom:6}}>1. Go to <strong>sheets.google.com</strong> and create a new sheet.</div>
-                <div style={{marginBottom:6}}>2. Rename the first tab to <strong>Withdrawals</strong>.</div>
-                <div style={{marginBottom:6}}>3. Add these headers in row 1:</div>
-                <div style={{background:C.silver,borderRadius:6,padding:"8px 10px",fontFamily:"monospace",fontSize:11,marginBottom:8,lineHeight:1.9}}>
-                  A: Request ID<br/>B: Date<br/>C: Client ID<br/>D: Client Name<br/>E: Withdrawal Type<br/>F: Amount<br/>G: CCY<br/>H: Notes<br/>I: Requested By<br/>J: Status
-                </div>
-                <div style={{marginBottom:6}}>4. Share the sheet with your back-office team (Viewer or Editor access).</div>
-                <div>5. Copy the <strong>Spreadsheet ID</strong> from the URL:<br/><span style={{fontFamily:"monospace",fontSize:11,background:C.silver,padding:"2px 6px",borderRadius:4}}>docs.google.com/spreadsheets/d/<strong>[ID HERE]</strong>/edit</span></div>
-              </div>
-            </div>
-            <div>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:C.navy,marginBottom:12}}>Step 2 — Create an API key</div>
-              <div style={{fontSize:12,color:C.text,lineHeight:1.8}}>
-                <div style={{marginBottom:6}}>1. Go to <strong>console.cloud.google.com</strong></div>
-                <div style={{marginBottom:6}}>2. Create a new project (or use existing).</div>
-                <div style={{marginBottom:6}}>3. Enable the <strong>Google Sheets API</strong>.</div>
-                <div style={{marginBottom:6}}>4. Go to <strong>APIs &amp; Services -&gt; Credentials</strong> → Create credentials → <strong>API Key</strong>.</div>
-                <div style={{marginBottom:6}}>5. Restrict the key to the <strong>Google Sheets API</strong> only (security best practice).</div>
-                <div style={{marginBottom:6}}>6. <strong>Important:</strong> Set the sheet sharing to <strong>"Anyone with the link can view"</strong> so the API key can read statuses without OAuth.</div>
-                <div style={{background:C.amberBg,borderRadius:6,padding:"8px 10px",fontSize:11,color:C.amber,marginTop:8}}>Note: API keys are visible in the browser. Only enable Sheets API access, and consider IP restrictions for production use.</div>
-              </div>
-            </div>
+        <Modal title="Google Sheets setup" onClose={()=>setShowSetup(false)}>
+          <div style={{fontSize:13,color:C.text,lineHeight:1.8,marginBottom:16}}>
+            <strong>1.</strong> Create a Google Sheet, name the first tab <strong>Withdrawals</strong>.<br/>
+            <strong>2.</strong> Add headers: Request ID, Date, Client ID, Client Name, Withdrawal Type, Amount, CCY, Notes, Requested By, Status<br/>
+            <strong>3.</strong> Enable <strong>Google Sheets API</strong> in Google Cloud Console and create an API key.<br/>
+            <strong>4.</strong> Share your sheet as "Anyone with link can view".
           </div>
-          <div style={{borderTop:`0.5px solid ${C.silver}`,paddingTop:18}}>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:C.navy,marginBottom:14}}>Step 3 — Enter your credentials</div>
-            <FldInput label="Spreadsheet ID" value={sheetId} onChange={setSheetId} placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"/>
-            <FldInput label="API Key" value={apiKey} onChange={setApiKey} placeholder="AIzaSy..."/>
-            <div style={{background:C.silver,borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:12,color:C.text,lineHeight:1.7}}>
-              After saving, paste these values into the <strong>SHEETS_CONFIG</strong> object at the top of the source code (lines 44–46) for the connection to persist across sessions. The fields above update the config for this session only.
-            </div>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>setShowSetup(false)}>Close</Btn>
-              <Btn onClick={()=>{SHEETS_CONFIG.SPREADSHEET_ID=sheetId;SHEETS_CONFIG.API_KEY=apiKey;setShowSetup(false);}}>Save for this session</Btn>
-            </div>
+          <FldInput label="Spreadsheet ID" value={sheetId} onChange={setSheetId} placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"/>
+          <FldInput label="API Key" value={apiKey} onChange={setApiKey} placeholder="AIzaSy..."/>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <Btn variant="secondary" onClick={()=>setShowSetup(false)}>Close</Btn>
+            <Btn onClick={()=>{SHEETS_CONFIG.SPREADSHEET_ID=sheetId;SHEETS_CONFIG.API_KEY=apiKey;setShowSetup(false);}}>Save</Btn>
           </div>
         </Modal>
       )}
     </div>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── AI PORTFOLIO ASSISTANT ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+const SUGGESTED_PROMPTS = [
+  "What are the key risks across all client portfolios right now?",
+  "Which clients have the highest concentration risk?",
+  "Give me a market outlook for global equities this quarter",
+  "Are any clients breaching their investment mandate?",
+  "What's the outlook for GBP-hedged ETFs given current FX rates?",
+  "Summarise Hash Murji's portfolio and flag any concerns",
+  "Which holdings have the worst unrealised P&L across all clients?",
+  "What would a rebalance look like for Lyndsey Starkie?",
+];
+
+const buildPortfolioContext = (selectedCcy) => {
+  const sym = CCY_SYMBOLS[selectedCcy] || "$";
+  let ctx = "=== i-CONVERGENCE PLATFORM DATA ===\n\n";
+  ctx += "CLIENTS AND PORTFOLIOS:\n";
+  CLIENTS.forEach(c => {
+    const t = clientTotals(c.id, selectedCcy);
+    const hs = HOLDINGS[c.id] || [];
+    const equity = hs.filter(h => !h.isCash);
+    const cash = hs.filter(h => h.isCash);
+    ctx += `\n${c.name} (${c.id})\n`;
+    ctx += `  Risk profile: ${c.riskScore}/10 — ${c.riskLabel}\n`;
+    ctx += `  Mandate: ${c.mandate}\n`;
+    ctx += `  Total value: ${sym}${fmt(t.totalValue, 0)} | Cost: ${sym}${fmt(t.totalCost, 0)} | P&L: ${t.pl >= 0 ? "+" : ""}${sym}${fmt(t.pl, 0)} (${pct(t.pctReturn)})\n`;
+    ctx += `  Holdings (${equity.length} positions):\n`;
+    equity.forEach(h => {
+      const cv = convertAmount(h.value, h.ccy, selectedCcy);
+      const cc = convertAmount(h.cost, h.ccy, selectedCcy);
+      const pl = cv - cc;
+      const pctOfPort = t.totalValue > 0 ? (cv / t.totalValue * 100) : 0;
+      ctx += `    ${h.ticker}: ${fmt(h.qty, 0)} shares, value ${sym}${fmt(cv, 0)} (${fmt(pctOfPort, 1)}% of portfolio), P&L ${pl >= 0 ? "+" : ""}${sym}${fmt(Math.abs(pl), 0)}\n`;
+    });
+    ctx += `  Cash: ${sym}${fmt(cash.reduce((s, h) => s + convertAmount(h.value, h.ccy, selectedCcy), 0), 0)}\n`;
+  });
+  ctx += "\nFX RATES: GBP/USD 1.2618 | GBP/EUR 1.1603 | EUR/USD 1.0875 | USD/CNY 7.24\n";
+  ctx += "\nMARKET CONTEXT: S&P 500 at 5312 (+0.35%), FTSE 100 at 8247 (-0.15%), EM equities rallying on China stimulus\n";
+  return ctx;
+};
+
+const AIAssistant = ({ selectedCcy }) => {
+  const isMobile = useIsMobile();
+  const [messages, setMessages] = useState([
+    { role: "assistant", content: "Hello! I'm your i-Convergence AI Portfolio Assistant. I have full visibility of all four client portfolios, their holdings, P&L, risk profiles, and mandates.\n\nAsk me anything — market insights, portfolio analysis, mandate compliance, rebalancing ideas, or client-specific questions." }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [selectedClient, setSelectedClientAI] = useState("all");
+  const chatEndRef = useState(null);
+  const messagesRef = useState(null);
+
+  const sendMessage = async (text) => {
+    const userText = text || input.trim();
+    if (!userText) return;
+    setInput("");
+    setLoading(true);
+
+    const userMsg = { role: "user", content: userText };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+
+    // Build context
+    const portfolioCtx = buildPortfolioContext(selectedCcy);
+    const clientFilter = selectedClient !== "all"
+      ? `\nFOCUS: The user is asking about ${(CLIENTS.find(c => c.id === selectedClient) || {name: selectedClient}).name} specifically.\n`
+      : "";
+
+    const systemPrompt = `You are an expert financial portfolio assistant for i-Convergence, a financial platform management system. You have access to real client portfolio data provided below.
+
+Your role:
+- Provide insightful, specific analysis based on the actual portfolio data
+- Flag risks, opportunities, and mandate breaches proactively  
+- Give clear, actionable recommendations
+- Reference specific tickers, amounts, and percentages from the data
+- Be concise but thorough — advisers are busy professionals
+- Always note when something is AI analysis vs hard data
+- Never give personalised financial advice to end clients — your audience is the financial adviser
+
+${portfolioCtx}${clientFilter}
+
+Respond in a clear, professional tone. Use bullet points for lists. Bold key figures. Keep responses focused and actionable.`;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      const data = await response.json();
+      const reply = (data.content && data.content[0] && data.content[0].text) || "Sorry, I could not generate a response. Please try again.";
+      setMessages([...newMessages, { role: "assistant", content: reply }]);
+    } catch (err) {
+      setMessages([...newMessages, { role: "assistant", content: "Connection error. Please check your network and try again." }]);
+    }
+    setLoading(false);
+  };
+
+  const formatMessage = (text) => {
+    // Convert **bold** and bullet points
+    return text.split('\n').map((line, i) => {
+      const boldLine = line.replace(/\*\*(.*?)\*\*/g, (_, t) => `<strong>${t}</strong>`);
+      return <div key={i} style={{ marginBottom: line === '' ? 8 : 2 }} dangerouslySetInnerHTML={{ __html: boldLine || '&nbsp;' }} />;
+    });
+  };
+
+  return (
+    <div style={{ padding: isMobile ? "12px 10px" : 24, display: "flex", flexDirection: "column", height: "calc(100vh - 54px)" }}>
+      <div style={{ marginBottom: 16, flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Powered by Claude</div>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: isMobile ? 18 : 22, fontWeight: 600, color: C.navy, display: "flex", alignItems: "center", gap: 10 }}>
+          AI Portfolio Assistant
+          <span style={{ background: C.tealLight, color: C.tealMid, fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 100 }}>✦ Live</span>
+        </div>
+      </div>
+
+      {/* Client filter */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", flexShrink: 0 }}>
+        <span style={{ fontSize: 11, color: C.faint, alignSelf: "center" }}>Context:</span>
+        {[{ id: "all", name: "All clients" }, ...CLIENTS].map(c => (
+          <button key={c.id} onClick={() => setSelectedClientAI(c.id)}
+            style={{ background: selectedClient === c.id ? C.navy : C.white, color: selectedClient === c.id ? C.white : C.text, border: `0.5px solid ${selectedClient === c.id ? C.navy : C.silver}`, borderRadius: 6, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "'Inter',sans-serif", fontWeight: selectedClient === c.id ? 600 : 400 }}>
+            {c.name || c.id === "all" ? (c.name || "All clients") : c.id}
+          </button>
+        ))}
+      </div>
+
+      {/* Suggested prompts */}
+      {messages.length <= 1 && (
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8, marginBottom: 14, flexShrink: 0 }}>
+          {SUGGESTED_PROMPTS.slice(0, isMobile ? 4 : 8).map((p, i) => (
+            <button key={i} onClick={() => sendMessage(p)}
+              style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.text, cursor: "pointer", textAlign: "left", fontFamily: "'Inter',sans-serif", lineHeight: 1.5 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.teal; e.currentTarget.style.color = C.navy; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.silver; e.currentTarget.style.color = C.text; }}>
+              <span style={{ color: C.teal, marginRight: 6 }}>✦</span>{p}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Chat messages */}
+      <div style={{ flex: 1, overflowY: "auto", marginBottom: 14, display: "flex", flexDirection: "column", gap: 14 }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+            <div style={{
+              maxWidth: isMobile ? "90%" : "75%",
+              background: m.role === "user" ? C.navy : C.white,
+              color: m.role === "user" ? C.white : C.text,
+              border: m.role === "assistant" ? `0.5px solid ${C.silver}` : "none",
+              borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+              padding: "12px 16px",
+              fontSize: 13,
+              lineHeight: 1.7,
+            }}>
+              {m.role === "assistant" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: `0.5px solid ${C.silver}` }}>
+                  <span style={{ fontSize: 16 }}>✦</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.teal, letterSpacing: 1 }}>AI ASSISTANT</span>
+                </div>
+              )}
+              {formatMessage(m.content)}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: "12px 12px 12px 2px", padding: "12px 16px" }}>
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal, animation: "pulse 1.4s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
+                ))}
+                <span style={{ fontSize: 12, color: C.faint, marginLeft: 6 }}>Analysing portfolios...</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <input value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+          placeholder="Ask about markets, portfolios, risk, rebalancing..."
+          style={{ flex: 1, padding: "11px 14px", border: `1.5px solid ${C.silver}`, borderRadius: 8, fontSize: 13, fontFamily: "'Inter',sans-serif", outline: "none", color: C.navy }}
+          onFocus={e => e.target.style.borderColor = C.teal}
+          onBlur={e => e.target.style.borderColor = C.silver} />
+        <Btn onClick={() => sendMessage()} variant="dark" disabled={loading}>
+          {loading ? "..." : "Send"}
+        </Btn>
+        {messages.length > 1 && (
+          <Btn onClick={() => setMessages([messages[0]])} variant="secondary">Clear</Btn>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── RISK & SUITABILITY ──────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+const calcRiskFlags = (clientId) => {
+  const client = CLIENTS.find(c => c.id === clientId);
+  if (!client) return [];
+  const hs = HOLDINGS[clientId] || [];
+  const totalVal = hs.reduce((s, h) => s + h.value, 0);
+  const equityVal = hs.filter(h => !h.isCash).reduce((s, h) => s + h.value, 0);
+  const cashVal = hs.filter(h => h.isCash).reduce((s, h) => s + h.value, 0);
+  const flags = [];
+  // Equity concentration
+  const equityPct = totalVal > 0 ? (equityVal / totalVal * 100) : 0;
+  if (equityPct > client.maxEquityPct) {
+    flags.push({ severity: "breach", field: "Equity allocation", value: `${fmt(equityPct, 1)}%`, limit: `Max ${client.maxEquityPct}%`, msg: `Equity ${fmt(equityPct, 1)}% exceeds mandate max of ${client.maxEquityPct}%` });
+  }
+  // Single holding concentration
+  hs.filter(h => !h.isCash).forEach(h => {
+    const hPct = totalVal > 0 ? (h.value / totalVal * 100) : 0;
+    if (hPct > client.maxSinglePct) {
+      flags.push({ severity: "breach", field: `${h.ticker} concentration`, value: `${fmt(hPct, 1)}%`, limit: `Max ${client.maxSinglePct}%`, msg: `${h.ticker} at ${fmt(hPct, 1)}% of portfolio exceeds single holding limit of ${client.maxSinglePct}%` });
+    }
+  });
+  // Fixed income floor — approximate: ERNS, GILS, IS15, SCHO, SCHP, VCSH, BNDX, AGBP, VGOV, CSH2, SGOV, XGIG
+  const fixedTickers = ["ERNS","GILS","IS15","SCHO","SCHP","VCSH","BNDX","AGBP","VGOV","CSH2","SGOV","XGIG","GSPX"];
+  const fixedIncomeTickers = ["ERNS","GILS","IS15","SCHO","SCHP","VCSH","BNDX","AGBP","VGOV","SGOV","XGIG"];
+  const fiVal = hs.filter(h => fixedIncomeTickers.includes(h.ticker)).reduce((s, h) => s + h.value, 0);
+  const fiPct = totalVal > 0 ? (fiVal / totalVal * 100) : 0;
+  if (fiPct < client.minFixedIncomePct) {
+    flags.push({ severity: "warning", field: "Fixed income allocation", value: `${fmt(fiPct, 1)}%`, limit: `Min ${client.minFixedIncomePct}%`, msg: `Fixed income ${fmt(fiPct, 1)}% is below mandate minimum of ${client.minFixedIncomePct}%` });
+  }
+  // Cash check
+  const cashPct = totalVal > 0 ? (cashVal / totalVal * 100) : 0;
+  if (cashPct > 40) {
+    flags.push({ severity: "warning", field: "Cash allocation", value: `${fmt(cashPct, 1)}%`, limit: "Max 40%", msg: `Cash position of ${fmt(cashPct, 1)}% is unusually high — review mandate` });
+  }
+  // Review overdue
+  const nextReview = new Date(client.nextReview);
+  const today = new Date("2025-06-21");
+  if (nextReview < today) {
+    flags.push({ severity: "warning", field: "Review overdue", value: client.nextReview, limit: "Annual", msg: `Suitability review was due ${client.nextReview}` });
+  }
+  return flags;
+};
+
+const RiskPage = ({ selectedCcy, setSection, setSelectedClient }) => {
+  const isMobile = useIsMobile();
+  const sym = CCY_SYMBOLS[selectedCcy] || "$";
+  const [selected, setSelected] = useState(null);
+  const allFlags = CLIENTS.map(c => ({ client: c, flags: calcRiskFlags(c.id) }));
+  const totalBreaches = allFlags.reduce((s, { flags }) => s + flags.filter(f => f.severity === "breach").length, 0);
+  const totalWarnings = allFlags.reduce((s, { flags }) => s + flags.filter(f => f.severity === "warning").length, 0);
+
+  const selectedClient = selected ? CLIENTS.find(c => c.id === selected) : null;
+  const selectedFlags = selected ? calcRiskFlags(selected) : [];
+  const selectedHoldings = selected ? HOLDINGS[selected] || [] : [];
+  const selectedTotal = selected ? clientTotals(selected, selectedCcy).totalValue : 0;
+
+  return (
+    <div style={{ padding: isMobile ? "12px 10px" : 24 }}>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Compliance</div>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: isMobile ? 18 : 22, fontWeight: 600, color: C.navy }}>Risk & suitability</div>
+      </div>
+
+      {/* Summary banner */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+        <StatCard label="Mandate breaches" value={totalBreaches} sub={totalBreaches > 0 ? "Action required" : "All clear"} trend={totalBreaches > 0 ? "down" : "up"} />
+        <StatCard label="Warnings" value={totalWarnings} sub={totalWarnings > 0 ? "Review recommended" : "All clear"} trend={totalWarnings > 0 ? "down" : "up"} />
+        <StatCard label="Clients reviewed" value="4/4" sub="All suitability current" trend="up" />
+        <StatCard label="Compliance score" value={totalBreaches === 0 ? "100%" : totalBreaches === 1 ? "92%" : "84%"} sub="MiFID II basis" trend={totalBreaches > 0 ? "down" : "up"} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.6fr", gap: 14 }}>
+        {/* Client list with flag counts */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Client risk overview</div>
+          {allFlags.map(({ client: c, flags }) => {
+            const breaches = flags.filter(f => f.severity === "breach");
+            const warnings = flags.filter(f => f.severity === "warning");
+            const status = breaches.length > 0 ? "breach" : warnings.length > 0 ? "warning" : "ok";
+            const t = clientTotals(c.id, selectedCcy);
+            return (
+              <div key={c.id} onClick={() => setSelected(selected === c.id ? null : c.id)}
+                style={{ background: C.white, border: `0.5px solid ${selected === c.id ? C.teal : status === "breach" ? C.red : status === "warning" ? C.gold : C.silver}`, borderRadius: 10, padding: "14px 16px", marginBottom: 8, cursor: "pointer" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, color: C.navy }}>{c.name}</div>
+                    <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>Risk {c.riskScore}/10 — {c.riskLabel}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {breaches.length > 0 && <Badge color="error">{breaches.length} breach{breaches.length > 1 ? "es" : ""}</Badge>}
+                    {warnings.length > 0 && <Badge color="warning">{warnings.length} warning{warnings.length > 1 ? "s" : ""}</Badge>}
+                    {flags.length === 0 && <Badge color="success">Compliant</Badge>}
+                  </div>
+                </div>
+                {/* Risk score bar */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.faint, marginBottom: 4 }}>
+                    <span>Risk appetite</span><span>{c.riskScore}/10</span>
+                  </div>
+                  <div style={{ height: 4, background: C.silver, borderRadius: 2 }}>
+                    <div style={{ height: "100%", width: `${c.riskScore * 10}%`, background: c.riskScore >= 8 ? C.red : c.riskScore >= 6 ? C.gold : C.green, borderRadius: 2 }} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: C.faint, borderTop: `0.5px solid ${C.silver}`, paddingTop: 8 }}>
+                  Next review: <strong style={{ color: C.navy }}>{c.nextReview}</strong>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right panel — selected client detail */}
+        <div>
+          {!selected ? (
+            <div style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 10, padding: 32, textAlign: "center", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>⚖</div>
+              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 600, color: C.navy, marginBottom: 6 }}>Select a client</div>
+              <div style={{ fontSize: 13, color: C.faint }}>Click a client to see their mandate, risk flags, and holding-level compliance detail.</div>
+            </div>
+          ) : (
+            <div>
+              {/* Mandate card */}
+              <div style={{ background: C.navy, borderRadius: 10, padding: "16px 18px", marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>Investment mandate</div>
+                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 600, color: C.white, marginBottom: 6 }}>{selectedClient.riskLabel}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.7 }}>{selectedClient.mandate}</div>
+                <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "0.5px solid rgba(255,255,255,0.1)" }}>
+                  {[["Max equity", `${selectedClient.maxEquityPct}%`], ["Max single", `${selectedClient.maxSinglePct}%`], ["Min fixed income", `${selectedClient.minFixedIncomePct}%`], ["Last reviewed", selectedClient.lastReview]].map(([l, v]) => (
+                    <div key={l}><div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: C.white, marginTop: 2 }}>{v}</div></div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Flags */}
+              {selectedFlags.length > 0 ? (
+                <div style={{ marginBottom: 12 }}>
+                  {selectedFlags.map((f, i) => (
+                    <div key={i} style={{ background: f.severity === "breach" ? C.redBg : C.amberBg, border: `1px solid ${f.severity === "breach" ? C.red : C.gold}`, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 4 }}>
+                            <Badge color={f.severity === "breach" ? "error" : "warning"}>{f.severity === "breach" ? "⚠ Breach" : "⚠ Warning"}</Badge>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>{f.field}</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: C.text }}>{f.msg}</div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: f.severity === "breach" ? C.red : C.amber }}>{f.value}</div>
+                          <div style={{ fontSize: 10, color: C.faint }}>limit: {f.limit}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>✓ Fully mandate compliant</div>
+                  <div style={{ fontSize: 12, color: C.text, marginTop: 2 }}>All holdings within risk parameters.</div>
+                </div>
+              )}
+
+              {/* Holdings with % of portfolio */}
+              <div style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 10, overflow: "hidden" }}>
+                <div style={{ padding: "11px 14px", borderBottom: `0.5px solid ${C.silver}`, fontSize: 12, fontWeight: 600, color: C.navy }}>Holdings — mandate view</div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead><tr style={{ background: C.silver }}>
+                      {["Ticker", "Type", "Value", "% Portfolio", "Risk flag"].map(h => (
+                        <th key={h} style={{ padding: "7px 12px", textAlign: "left", fontSize: 10, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {selectedHoldings.map((h, i) => {
+                        const cv = convertAmount(h.value, h.ccy, selectedCcy);
+                        const pctPort = selectedTotal > 0 ? (convertAmount(h.value, h.ccy, selectedCcy) / selectedTotal * 100) : 0;
+                        const overConc = !h.isCash && pctPort > selectedClient.maxSinglePct;
+                        return (
+                          <tr key={i} style={{ borderBottom: `0.5px solid ${C.silver}`, background: i % 2 === 0 ? C.white : "#FAFBFC" }}>
+                            <td style={{ padding: "8px 12px", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, color: C.navy }}>{h.ticker}</td>
+                            <td style={{ padding: "8px 12px" }}><Badge color={h.isCash ? "navy" : "info"}>{h.isCash ? "Cash" : "ETF"}</Badge></td>
+                            <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: C.navy }}>{sym}{fmt(cv, 0)}</td>
+                            <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                                <div style={{ width: 48, height: 4, background: C.silver, borderRadius: 2, overflow: "hidden" }}>
+                                  <div style={{ width: `${Math.min(pctPort, 100)}%`, height: "100%", background: overConc ? C.red : C.teal, borderRadius: 2 }} />
+                                </div>
+                                <span style={{ color: overConc ? C.red : C.text, fontWeight: overConc ? 700 : 400 }}>{fmt(pctPort, 1)}%</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: "8px 12px" }}>
+                              {overConc ? <Badge color="error">Over limit</Badge> : <span style={{ fontSize: 11, color: C.green }}>✓</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                <Btn small variant="ghost" onClick={() => { setSelectedClient(selected); setSection("clients"); }}>View full profile</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── REBALANCING TOOL ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+const DEFAULT_TARGETS = {
+  C00355633: { equity: 65, fixedIncome: 25, cash: 10 },
+  C00356735: { equity: 55, fixedIncome: 30, cash: 15 },
+  C00355634: { equity: 75, fixedIncome: 20, cash: 5 },
+  C00347223: { equity: 80, fixedIncome: 15, cash: 5 },
+};
+
+const RebalancePage = ({ selectedCcy }) => {
+  const isMobile = useIsMobile();
+  const sym = CCY_SYMBOLS[selectedCcy] || "$";
+  const [selectedId, setSelectedId] = useState(CLIENTS[0].id);
+  const [targets, setTargets] = useState(DEFAULT_TARGETS);
+  const [showTrades, setShowTrades] = useState(false);
+
+  const client = CLIENTS.find(c => c.id === selectedId);
+  const hs = HOLDINGS[selectedId] || [];
+  const totalVal = hs.reduce((s, h) => s + convertAmount(h.value, h.ccy, selectedCcy), 0);
+
+  const FI_TICKERS = ["ERNS","GILS","IS15","SCHO","SCHP","VCSH","BNDX","AGBP","VGOV","SGOV","XGIG"];
+  const equityVal = hs.filter(h => !h.isCash && !FI_TICKERS.includes(h.ticker)).reduce((s, h) => s + convertAmount(h.value, h.ccy, selectedCcy), 0);
+  const fiVal = hs.filter(h => FI_TICKERS.includes(h.ticker)).reduce((s, h) => s + convertAmount(h.value, h.ccy, selectedCcy), 0);
+  const cashVal = hs.filter(h => h.isCash).reduce((s, h) => s + convertAmount(h.value, h.ccy, selectedCcy), 0);
+
+  const currentPcts = {
+    equity: totalVal > 0 ? equityVal / totalVal * 100 : 0,
+    fixedIncome: totalVal > 0 ? fiVal / totalVal * 100 : 0,
+    cash: totalVal > 0 ? cashVal / totalVal * 100 : 0,
+  };
+
+  const tgt = targets[selectedId] || { equity: 60, fixedIncome: 30, cash: 10 };
+  const setTgt = (field, val) => setTargets(t => ({ ...t, [selectedId]: { ...t[selectedId], [field]: val } }));
+
+  const drifts = {
+    equity: tgt.equity - currentPcts.equity,
+    fixedIncome: tgt.fixedIncome - currentPcts.fixedIncome,
+    cash: tgt.cash - currentPcts.cash,
+  };
+
+  const trades = [];
+  if (Math.abs(drifts.equity) > 1) {
+    const amt = Math.abs(drifts.equity / 100 * totalVal);
+    trades.push({ action: drifts.equity > 0 ? "BUY" : "SELL", asset: "Equity ETFs", amount: amt, note: drifts.equity > 0 ? "Increase equity exposure" : "Reduce equity exposure" });
+  }
+  if (Math.abs(drifts.fixedIncome) > 1) {
+    const amt = Math.abs(drifts.fixedIncome / 100 * totalVal);
+    trades.push({ action: drifts.fixedIncome > 0 ? "BUY" : "SELL", asset: "Fixed income ETFs", amount: amt, note: drifts.fixedIncome > 0 ? "Increase fixed income" : "Reduce fixed income" });
+  }
+  if (Math.abs(drifts.cash) > 2) {
+    const amt = Math.abs(drifts.cash / 100 * totalVal);
+    trades.push({ action: drifts.cash > 0 ? "HOLD/RECEIVE" : "DEPLOY", asset: "Cash", amount: amt, note: drifts.cash > 0 ? "Allow cash to build" : "Deploy excess cash" });
+  }
+
+  const isBalanced = trades.length === 0;
+
+  return (
+    <div style={{ padding: isMobile ? "12px 10px" : 24 }}>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Portfolio management</div>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: isMobile ? 18 : 22, fontWeight: 600, color: C.navy }}>Rebalancing tool</div>
+      </div>
+
+      {/* Client selector */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        {CLIENTS.map(c => (
+          <button key={c.id} onClick={() => { setSelectedId(c.id); setShowTrades(false); }}
+            style={{ background: selectedId === c.id ? C.navy : C.white, color: selectedId === c.id ? C.white : C.text, border: `0.5px solid ${selectedId === c.id ? C.navy : C.silver}`, borderRadius: 7, padding: "8px 16px", fontSize: 13, cursor: "pointer", fontFamily: "'Inter',sans-serif", fontWeight: selectedId === c.id ? 600 : 400 }}>
+            {c.name.split(" ")[0]}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
+        {/* Current vs target */}
+        <div style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 10, padding: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 14 }}>Current allocation vs target</div>
+          {[
+            { label: "Equity", key: "equity", current: currentPcts.equity, color: C.teal },
+            { label: "Fixed income", key: "fixedIncome", current: currentPcts.fixedIncome, color: C.navyMid },
+            { label: "Cash", key: "cash", current: currentPcts.cash, color: C.silverMid },
+          ].map(({ label, key, current, color }) => (
+            <div key={key} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: C.navy }}>{label}</span>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: C.faint }}>Now: <strong style={{ color: C.navy }}>{fmt(current, 1)}%</strong></span>
+                  <span style={{ fontSize: 11, color: C.faint }}>Target: <strong style={{ color: C.teal }}>{tgt[key]}%</strong></span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: Math.abs(tgt[key] - current) > 2 ? (tgt[key] - current > 0 ? C.green : C.red) : C.faint }}>
+                    {tgt[key] - current > 0 ? "+" : ""}{fmt(tgt[key] - current, 1)}%
+                  </span>
+                </div>
+              </div>
+              <div style={{ position: "relative", height: 8, background: C.silver, borderRadius: 4 }}>
+                <div style={{ position: "absolute", height: "100%", width: `${Math.min(current, 100)}%`, background: color, borderRadius: 4, opacity: 0.4 }} />
+                <div style={{ position: "absolute", height: "100%", width: 2, left: `${Math.min(tgt[key], 100)}%`, background: color, borderRadius: 1 }} />
+              </div>
+              {/* Target slider */}
+              <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 10, color: C.faint }}>Adjust target:</span>
+                <input type="range" min={0} max={100} value={tgt[key]} onChange={e => setTgt(key, parseInt(e.target.value))}
+                  style={{ flex: 1, accentColor: C.teal }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: C.teal, minWidth: 32 }}>{tgt[key]}%</span>
+              </div>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: tgt.equity + tgt.fixedIncome + tgt.cash !== 100 ? C.red : C.green, padding: "8px 0", borderTop: `0.5px solid ${C.silver}` }}>
+            Target total: {tgt.equity + tgt.fixedIncome + tgt.cash}% {tgt.equity + tgt.fixedIncome + tgt.cash !== 100 ? "(must equal 100%)" : "✓"}
+          </div>
+        </div>
+
+        {/* Trade list */}
+        <div>
+          <div style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 10, padding: 18, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 12 }}>Portfolio summary — {client.name}</div>
+            {[
+              ["Total value", `${sym}${fmt(totalVal, 0)}`],
+              ["Equity", `${sym}${fmt(equityVal, 0)} (${fmt(currentPcts.equity, 1)}%)`],
+              ["Fixed income", `${sym}${fmt(fiVal, 0)} (${fmt(currentPcts.fixedIncome, 1)}%)`],
+              ["Cash", `${sym}${fmt(cashVal, 0)} (${fmt(currentPcts.cash, 1)}%)`],
+            ].map(([l, v]) => (
+              <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `0.5px solid ${C.silver}` }}>
+                <span style={{ fontSize: 12, color: C.faint }}>{l}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>{v}</span>
+              </div>
+            ))}
+          </div>
+
+          {isBalanced ? (
+            <div style={{ background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 10, padding: "16px 18px" }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.green, marginBottom: 4 }}>✓ Portfolio is balanced</div>
+              <div style={{ fontSize: 12, color: C.text }}>All allocations are within 1% of target. No rebalancing trades needed.</div>
+            </div>
+          ) : (
+            <div style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ padding: "12px 16px", borderBottom: `0.5px solid ${C.silver}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>Suggested trades</div>
+                <Btn small onClick={() => {
+                  const csv = "Action,Asset,Amount\n" + trades.map(t => `${t.action},${t.asset},${sym}${fmt(t.amount, 0)}`).join("\n");
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `rebalance-${selectedId}.csv`; a.click();
+                }}>Export CSV</Btn>
+              </div>
+              {trades.map((t, i) => (
+                <div key={i} style={{ padding: "12px 16px", borderBottom: `0.5px solid ${C.silver}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <Badge color={t.action === "BUY" || t.action === "HOLD/RECEIVE" ? "success" : "error"}>{t.action}</Badge>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>{t.asset}</div>
+                      <div style={{ fontSize: 11, color: C.faint }}>{t.note}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 700, color: C.navy }}>{sym}{fmt(t.amount, 0)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── ALERTS ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+const DEFAULT_ALERTS = [
+  { id: 1, type: "price_drop", clientId: "all", ticker: "GSPX", threshold: -5, period: "1W", active: true, triggered: false, label: "GSPX drops >5% in a week" },
+  { id: 2, type: "cash_high", clientId: "C00347223", ticker: "CASH", threshold: 60, period: "", active: true, triggered: true, label: "Hash cash > 60% of portfolio" },
+  { id: 3, type: "pl_loss", clientId: "C00355634", ticker: "DBEU", threshold: -15, period: "", active: true, triggered: true, label: "DBEU P&L exceeds -15%" },
+  { id: 4, type: "review_due", clientId: "all", ticker: "", threshold: 0, period: "Annual", active: true, triggered: false, label: "Annual suitability review due" },
+  { id: 5, type: "price_drop", clientId: "all", ticker: "ARKK", threshold: -10, period: "1M", active: false, triggered: false, label: "ARKK drops >10% in a month" },
+];
+
+const AlertsPage = ({ selectedCcy, setSection, setSelectedClient }) => {
+  const isMobile = useIsMobile();
+  const [alerts, setAlerts] = useState(DEFAULT_ALERTS);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newAlert, setNewAlert] = useState({ type: "price_drop", clientId: "all", ticker: "", threshold: "", period: "1W" });
+
+  const toggle = (id) => setAlerts(a => a.map(al => al.id === id ? { ...al, active: !al.active } : al));
+  const remove = (id) => setAlerts(a => a.filter(al => al.id !== id));
+  const triggered = alerts.filter(a => a.triggered && a.active);
+  const active = alerts.filter(a => !a.triggered && a.active);
+  const inactive = alerts.filter(a => !a.active);
+
+  return (
+    <div style={{ padding: isMobile ? "12px 10px" : 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Monitoring</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: isMobile ? 18 : 22, fontWeight: 600, color: C.navy }}>
+            Alerts & thresholds
+            {triggered.length > 0 && <span style={{ background: C.redBg, color: C.red, fontSize: 13, fontWeight: 700, padding: "2px 10px", borderRadius: 100, marginLeft: 10 }}>{triggered.length} triggered</span>}
+          </div>
+        </div>
+        <Btn onClick={() => setShowAdd(true)}>+ New alert</Btn>
+      </div>
+
+      {triggered.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.red, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Triggered alerts</div>
+          {triggered.map(a => {
+            const client = a.clientId !== "all" ? CLIENTS.find(c => c.id === a.clientId) : null;
+            return (
+              <div key={a.id} style={{ background: C.redBg, border: `1px solid ${C.red}`, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                <div>
+                  <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 4 }}>
+                    <Badge color="error">Triggered</Badge>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.navy }}>{a.label}</span>
+                  </div>
+                  {client && <div style={{ fontSize: 11, color: C.faint }}>{client.name}</div>}
+                </div>
+                <div style={{ display: "flex", gap: 7 }}>
+                  {a.clientId !== "all" && <Btn small variant="ghost" onClick={() => { setSelectedClient(a.clientId); setSection("clients"); }}>View client</Btn>}
+                  <Btn small variant="secondary" onClick={() => setAlerts(al => al.map(x => x.id === a.id ? { ...x, triggered: false } : x))}>Dismiss</Btn>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Active alerts ({active.length})</div>
+        {active.map(a => {
+          const client = a.clientId !== "all" ? CLIENTS.find(c => c.id === a.clientId) : null;
+          return (
+            <div key={a.id} style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 10, padding: "13px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.green, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.navy }}>{a.label}</div>
+                  <div style={{ fontSize: 11, color: C.faint }}>{client ? client.name : "All clients"}{a.ticker ? ` · ${a.ticker}` : ""}{a.period ? ` · ${a.period}` : ""}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Btn small variant="secondary" onClick={() => toggle(a.id)}>Pause</Btn>
+                <Btn small variant="danger" onClick={() => remove(a.id)}>Delete</Btn>
+              </div>
+            </div>
+          );
+        })}
+        {active.length === 0 && <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: C.faint }}>No active alerts. Add one above.</div>}
+      </div>
+
+      {inactive.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Paused ({inactive.length})</div>
+          {inactive.map(a => (
+            <div key={a.id} style={{ background: "#FAFBFC", border: `0.5px solid ${C.silver}`, borderRadius: 10, padding: "13px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.65 }}>
+              <div style={{ fontSize: 13, color: C.faint }}>{a.label}</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Btn small variant="ghost" onClick={() => toggle(a.id)}>Enable</Btn>
+                <Btn small variant="danger" onClick={() => remove(a.id)}>Delete</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <Modal title="New alert" onClose={() => setShowAdd(false)}>
+          <FldSelect label="Alert type" value={newAlert.type} onChange={v => setNewAlert(a => ({ ...a, type: v }))} options={[
+            { value: "price_drop", label: "Price drop threshold" },
+            { value: "cash_high", label: "Cash allocation too high" },
+            { value: "pl_loss", label: "Unrealised P&L loss" },
+            { value: "concentration", label: "Holding concentration breach" },
+            { value: "review_due", label: "Suitability review due" },
+          ]} />
+          <FldSelect label="Client" value={newAlert.clientId} onChange={v => setNewAlert(a => ({ ...a, clientId: v }))} options={[{ value: "all", label: "All clients" }, ...CLIENTS.map(c => ({ value: c.id, label: c.name }))]} />
+          {["price_drop", "pl_loss", "concentration"].includes(newAlert.type) && (
+            <FldInput label="Ticker" value={newAlert.ticker} onChange={v => setNewAlert(a => ({ ...a, ticker: v }))} placeholder="e.g. GSPX" />
+          )}
+          <FldInput label="Threshold (%)" value={newAlert.threshold} onChange={v => setNewAlert(a => ({ ...a, threshold: v }))} placeholder="e.g. -5" type="number" />
+          {["price_drop", "pl_loss"].includes(newAlert.type) && (
+            <FldSelect label="Period" value={newAlert.period} onChange={v => setNewAlert(a => ({ ...a, period: v }))} options={[{ value: "1D", label: "1 day" }, { value: "1W", label: "1 week" }, { value: "1M", label: "1 month" }]} />
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Btn>
+            <Btn onClick={() => {
+              const label = `${newAlert.ticker ? newAlert.ticker + " " : ""}${newAlert.type.replace(/_/g, " ")} ${newAlert.threshold ? newAlert.threshold + "%" : ""}`.trim();
+              setAlerts(a => [...a, { ...newAlert, id: Date.now(), active: true, triggered: false, label, threshold: parseFloat(newAlert.threshold) || 0 }]);
+              setShowAdd(false);
+              setNewAlert({ type: "price_drop", clientId: "all", ticker: "", threshold: "", period: "1W" });
+            }}>Create alert</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── DOCUMENT VAULT ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+const SAMPLE_DOCS = [
+  { id: 1, clientId: "C00355633", name: "Suitability Letter 2024.pdf", type: "Suitability", size: "245 KB", date: "2024-01-15", tag: "compliance" },
+  { id: 2, clientId: "C00355633", name: "KYC Pack - Lightfoot.pdf", type: "KYC", size: "1.2 MB", date: "2020-10-01", tag: "onboarding" },
+  { id: 3, clientId: "C00356735", name: "Investment Mandate - Starkie.pdf", type: "Mandate", size: "180 KB", date: "2024-02-15", tag: "compliance" },
+  { id: 4, clientId: "C00356735", name: "KYC Pack - Starkie.pdf", type: "KYC", size: "890 KB", date: "2021-02-15", tag: "onboarding" },
+  { id: 5, clientId: "C00355634", name: "Suitability Letter 2024.pdf", type: "Suitability", size: "198 KB", date: "2024-01-10", tag: "compliance" },
+  { id: 6, clientId: "C00355634", name: "Portfolio Mandate - Pauls.pdf", type: "Mandate", size: "156 KB", date: "2020-10-01", tag: "compliance" },
+  { id: 7, clientId: "C00347223", name: "Suitability Report - Murji 2024.pdf", type: "Suitability", size: "312 KB", date: "2024-03-01", tag: "compliance" },
+  { id: 8, clientId: "C00347223", name: "KYC - Murji - Enhanced DD.pdf", type: "KYC", size: "2.1 MB", date: "2020-09-01", tag: "onboarding" },
+  { id: 9, clientId: "C00347223", name: "Risk Questionnaire 2024.pdf", type: "Risk", size: "95 KB", date: "2024-03-01", tag: "compliance" },
+];
+
+const DocVaultPage = () => {
+  const isMobile = useIsMobile();
+  const [docs, setDocs] = useState(SAMPLE_DOCS);
+  const [filterClient, setFilterClient] = useState("all");
+  const [filterType, setFilterType] = useState("all");
+  const [search, setSearch] = useState("");
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadClient, setUploadClient] = useState("");
+  const [uploadType, setUploadType] = useState("KYC");
+  const [dragOver, setDragOver] = useState(false);
+
+  const filtered = docs.filter(d => {
+    const matchClient = filterClient === "all" || d.clientId === filterClient;
+    const matchType = filterType === "all" || d.type === filterType;
+    const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase());
+    return matchClient && matchType && matchSearch;
+  });
+
+  const docTypes = [...new Set(docs.map(d => d.type))];
+  const typeColors = { KYC: "navy", Suitability: "success", Mandate: "info", Risk: "warning" };
+
+  const handleDrop = (e) => {
+    e.preventDefault(); setDragOver(false);
+    const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+    if (files.length && uploadClient) {
+      files.forEach(f => setDocs(d => [...d, { id: Date.now() + Math.random(), clientId: uploadClient, name: f.name, type: uploadType, size: `${(f.size / 1024).toFixed(0)} KB`, date: new Date().toISOString().slice(0, 10), tag: "uploaded" }]));
+      setShowUpload(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: isMobile ? "12px 10px" : 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Compliance</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: isMobile ? 18 : 22, fontWeight: 600, color: C.navy }}>Document vault</div>
+        </div>
+        <Btn onClick={() => setShowUpload(true)}>+ Upload document</Btn>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search documents..."
+          style={{ flex: 1, minWidth: 180, padding: "7px 11px", border: `1.5px solid ${C.silver}`, borderRadius: 6, fontSize: 12, fontFamily: "'Inter',sans-serif", outline: "none" }} />
+        <select onChange={e => setFilterClient(e.target.value)} value={filterClient} style={{ padding: "7px 10px", border: `1.5px solid ${C.silver}`, borderRadius: 6, fontSize: 12, fontFamily: "'Inter',sans-serif", outline: "none", color: C.navy, background: C.white }}>
+          <option value="all">All clients</option>
+          {CLIENTS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select onChange={e => setFilterType(e.target.value)} value={filterType} style={{ padding: "7px 10px", border: `1.5px solid ${C.silver}`, borderRadius: 6, fontSize: 12, fontFamily: "'Inter',sans-serif", outline: "none", color: C.navy, background: C.white }}>
+          <option value="all">All types</option>
+          {docTypes.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+        {[["Total docs", docs.length], ["Clients covered", new Set(docs.map(d => d.clientId)).size], ["Compliance docs", docs.filter(d => d.tag === "compliance").length], ["KYC packs", docs.filter(d => d.type === "KYC").length]].map(([l, v]) => (
+          <StatCard key={l} label={l} value={v} />
+        ))}
+      </div>
+
+      {/* Doc grid */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 10 }}>
+        {filtered.map(d => {
+          const client = CLIENTS.find(c => c.id === d.clientId);
+          return (
+            <div key={d.id} style={{ background: C.white, border: `0.5px solid ${C.silver}`, borderRadius: 10, padding: 16 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+                <div style={{ width: 40, height: 48, background: C.navy, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.teal, fontSize: 18, flexShrink: 0 }}>📄</div>
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{client && client.name} · {d.size}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 5 }}>
+                  <Badge color={typeColors[d.type] || "info"}>{d.type}</Badge>
+                </div>
+                <span style={{ fontSize: 11, color: C.faint }}>{d.date}</span>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${C.silver}` }}>
+                <Btn small variant="ghost">View</Btn>
+                <Btn small variant="secondary" onClick={() => setDocs(docs.filter(x => x.id !== d.id))}>Remove</Btn>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {showUpload && (
+        <Modal title="Upload document" onClose={() => setShowUpload(false)}>
+          <FldSelect label="Client" value={uploadClient} onChange={setUploadClient} options={[{ value: "", label: "Select client..." }, ...CLIENTS.map(c => ({ value: c.id, label: c.name }))]} />
+          <FldSelect label="Document type" value={uploadType} onChange={setUploadType} options={["KYC", "Suitability", "Mandate", "Risk", "Report", "Correspondence", "Other"].map(v => ({ value: v, label: v }))} />
+          <div onDrop={handleDrop} onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
+            style={{ background: dragOver ? C.tealLight : C.silver, border: `2px dashed ${dragOver ? C.teal : C.silverMid}`, borderRadius: 10, padding: 32, textAlign: "center", marginBottom: 14, transition: "all 0.15s", cursor: "pointer" }}
+            onClick={() => document.getElementById("fileInput") && document.getElementById("fileInput").click()}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>📁</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: C.navy }}>Drag & drop files here</div>
+            <div style={{ fontSize: 11, color: C.faint, marginTop: 4 }}>or click to browse · PDF, DOC, XLSX accepted</div>
+            <input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.xlsx" style={{ display: "none" }}
+              onChange={e => {
+                const files = Array.from(e.target.files || []);
+                if (files.length && uploadClient) {
+                  files.forEach(f => setDocs(d => [...d, { id: Date.now() + Math.random(), clientId: uploadClient, name: f.name, type: uploadType, size: `${(f.size / 1024).toFixed(0)} KB`, date: new Date().toISOString().slice(0, 10), tag: "uploaded" }]));
+                  setShowUpload(false);
+                }
+              }} />
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn variant="secondary" onClick={() => setShowUpload(false)}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
 
 // ─── ROOT ──────────────────────────────────────────────────────────
 export default function App(){
@@ -1684,6 +2668,11 @@ export default function App(){
         {section==="transactions"&&<Transactions selectedCcy={selectedCcy}/>}
         {section==="pricing"&&<Pricing selectedCcy={selectedCcy}/>}
         {section==="valuations"&&<Valuations setSection={handleSection} setSelectedClient={setSelectedClient} selectedCcy={selectedCcy}/>}
+        {section==="ai"&&<AIAssistant selectedCcy={selectedCcy}/>}
+        {section==="risk"&&<RiskPage selectedCcy={selectedCcy} setSection={handleSection} setSelectedClient={setSelectedClient}/>}
+        {section==="rebalance"&&<RebalancePage selectedCcy={selectedCcy}/>}
+        {section==="alerts"&&<AlertsPage setSection={handleSection} setSelectedClient={setSelectedClient}/>}
+        {section==="docs"&&<DocVaultPage/>}
         {section==="withdrawals"&&<WithdrawalsPage/>}
         {section==="news"&&<News/>}
         {section==="connect"&&<Connect/>}
