@@ -341,15 +341,9 @@ const Nav=({section,setSection,selectedCcy,setCcy})=>{
   const items=[
     {key:"dashboard",label:"Dashboard",icon:"⊞"},
     {key:"clients",label:"Clients",icon:"👥"},
-    {key:"transactions",label:"Txns",icon:"⇄"},
-    {key:"valuations",label:"Valuations",icon:"◎"},
-    {key:"ai",label:"AI Insights",icon:"✦"},
-    {key:"risk",label:"Risk",icon:"⚖"},
-    {key:"rebalance",label:"Rebalance",icon:"⇌"},
     {key:"alerts",label:"Alerts",icon:"🔔"},
-    {key:"docs",label:"Docs",icon:"📁"},
-    {key:"withdrawals",label:"Withdrawals",icon:"↓"},
     {key:"pricing",label:"Pricing",icon:"◈"},
+    {key:"ai",label:"AI Insights",icon:"✦"},
     {key:"news",label:"News",icon:"📡"},
     {key:"connect",label:"Connect",icon:"⚡"},
   ];
@@ -511,14 +505,31 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
 
 // ─── CLIENT DETAIL ─────────────────────────────────────────────────
 const ClientDetail=({clientId,onBack,selectedCcy})=>{
+  const isMobile=useIsMobile();
   const [tab,setTab]=useState("valuation");
+  // Email/Log state
   const [showEmail,setShowEmail]=useState(false);
   const [showLog,setShowLog]=useState(false);
+  const [showWD,setShowWD]=useState(false);
+  const [showDocs,setShowDocs]=useState(false);
   const [emailSubject,setEmailSubject]=useState("");
   const [emailBody,setEmailBody]=useState("");
   const [logNote,setLogNote]=useState("");
   const [logType,setLogType]=useState("call");
   const [comms,setComms]=useState(COMMS[clientId]||[]);
+  // Withdrawal state
+  const [wdType,setWdType]=useState("PCLS");
+  const [wdAmount,setWdAmount]=useState("");
+  const [wdCcy,setWdCcy]=useState("GBP");
+  const [wdNotes,setWdNotes]=useState("");
+  const [wdSubmitting,setWdSubmitting]=useState(false);
+  const [wdError,setWdError]=useState("");
+  const [wdRequests,setWdRequests]=useState([]);
+  // Risk profile editing
+  const [riskProfiles,setRiskProfiles]=useState(DEFAULT_RISK_PROFILES);
+  const [editingRisk,setEditingRisk]=useState(false);
+  const [editScore,setEditScore]=useState((DEFAULT_RISK_PROFILES[clientId]||{score:5}).score);
+  const [editNotes,setEditNotes]=useState((DEFAULT_RISK_PROFILES[clientId]||{notes:""}).notes||"");
 
   const sym=CCY_SYMBOLS[selectedCcy]||"$";
   const client=CLIENTS.find(c=>c.id===clientId);
@@ -526,201 +537,334 @@ const ClientDetail=({clientId,onBack,selectedCcy})=>{
   const totals=clientTotals(clientId,selectedCcy);
   const chartData=buildChart(clientId,selectedCcy);
   const clientTxns=TXNS.filter(t=>t.clientId===clientId);
-  const {result:txSorted,sort:txSort,toggleSort:txToggle,filters:txFilters,setFilter:txSetFilter,search:txSearch,setSearch:txSetSearch}=useSortFilter(clientTxns,{col:"tradedate",dir:"desc"});
+  const {result:txSorted,sort:txSort,toggleSort:txToggle,setFilter:txSetFilter,search:txSearch,setSearch:txSetSearch}=useSortFilter(clientTxns,{col:"tradedate",dir:"desc"});
   const equityH=holdings.filter(h=>!h.isCash);
-  const cashH=holdings.filter(h=>h.isCash);
   const initials=client.name.split(" ").map(n=>n[0]).join("");
+  const profile=riskProfiles[clientId]||DEFAULT_RISK_PROFILES[clientId];
+  const score=(profile&&profile.score)||5;
+  const comp=computeCompliance(clientId,riskProfiles);
+  const clientDocs=DEFAULT_DOCS[clientId]||[];
+
+  useEffect(()=>{
+    loadRequests().then(all=>setWdRequests(all.filter(r=>r.clientId===clientId)));
+  },[clientId]);
 
   const sendEmail=()=>{
-    setComms([{id:Date.now(),date:new Date().toISOString().slice(0,10),type:"email",subject:emailSubject,summary:`Sent: ${emailBody.slice(0,80)}`,user:"JW"},...comms]);
+    setComms([{id:Date.now(),date:new Date().toISOString().slice(0,10),type:"email",subject:emailSubject,summary:"Sent: "+emailBody.slice(0,80),user:"JW"},...comms]);
     setShowEmail(false);setEmailSubject("");setEmailBody("");
   };
   const logComm=()=>{
     setComms([{id:Date.now(),date:new Date().toISOString().slice(0,10),type:logType,subject:"Manual log",summary:logNote,user:"JW"},...comms]);
     setShowLog(false);setLogNote("");
   };
-
+  const submitWithdrawal=async()=>{
+    if(!wdAmount||isNaN(parseFloat(wdAmount))){setWdError("Please enter a valid amount.");return;}
+    setWdSubmitting(true);setWdError("");
+    const reqId="WD-"+clientId.slice(-6)+"-"+Date.now().toString().slice(-6);
+    const dateStr=new Date().toISOString().slice(0,10);
+    const newReq={id:reqId,clientId,clientName:client.name,date:dateStr,type:wdType,amount:parseFloat(wdAmount),ccy:wdCcy,notes:wdNotes,status:"Pending"};
+    const row=[reqId,dateStr,clientId,client.name,wdType,parseFloat(wdAmount).toFixed(2),wdCcy,wdNotes||"—","JW","Pending"];
+    await appendToSheet(row);
+    const all=await loadRequests();
+    await saveRequests([newReq,...all]);
+    setWdRequests([newReq,...wdRequests]);
+    setWdSubmitting(false);
+    setShowWD(false);setWdAmount("");setWdNotes("");setWdType("PCLS");setWdCcy("GBP");
+  };
   const txTypes=[...new Set(clientTxns.map(t=>t.txtype))].sort();
   const tickers=[...new Set(clientTxns.map(t=>t.ticker))].sort();
+  const typeColour={KYC:"navy","Suitability":"success","Mandate":"info","Risk Disclosure":"warning","Authorisation":"gold"};
+  const typeIcon={KYC:"🪪","Suitability":"✅","Mandate":"📋","Risk Disclosure":"⚠️","Authorisation":"✍️"};
 
   return(
-    <div style={{padding:24}}>
+    <div style={{padding:isMobile?"12px 10px":24}}>
+      {/* ── HEADER ── */}
       <button onClick={onBack} style={{background:"none",border:"none",color:C.teal,fontSize:13,cursor:"pointer",marginBottom:14,padding:0,display:"flex",alignItems:"center",gap:4}}>← All clients</button>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:isMobile?14:20,flexWrap:"wrap",gap:14}}>
         <div style={{display:"flex",gap:14,alignItems:"center"}}>
           <div style={{width:50,height:50,borderRadius:"50%",background:C.teal,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:17,fontWeight:700,flexShrink:0}}>{initials}</div>
           <div>
             <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:21,fontWeight:600,color:C.navy}}>{client.name}</div>
             <div style={{fontSize:12,color:C.faint,marginTop:2}}>{client.code} · {client.email}</div>
-            <div style={{marginTop:5,display:"flex",gap:5}}><Badge color="success">Verified</Badge><Badge color="navy">{client.jurisdiction}</Badge></div>
+            <div style={{marginTop:5,display:"flex",gap:5,flexWrap:"wrap"}}><Badge color="success">Verified</Badge><Badge color="navy">{client.jurisdiction}</Badge></div>
           </div>
         </div>
-        <div style={{display:"flex",gap:7}}>
-          <Btn onClick={()=>setShowEmail(true)} variant="ghost">✉ Email</Btn>
-          <Btn onClick={()=>setShowLog(true)} variant="secondary">+ Log</Btn>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+          <Btn onClick={()=>setShowEmail(true)} variant="ghost" small={isMobile}>✉ Email</Btn>
+          <Btn onClick={()=>setShowLog(true)} variant="secondary" small={isMobile}>+ Log</Btn>
+          <Btn onClick={()=>setShowWD(true)} variant="dark" small={isMobile}>↓ Withdrawal</Btn>
+          <Btn onClick={()=>setShowDocs(true)} variant="secondary" small={isMobile}>📁 Docs</Btn>
         </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
-        <StatCard label={`Portfolio (${selectedCcy})`} value={`${sym}${fmt(totals.totalValue,0)}`}/>
-        <StatCard label="Cost basis" value={`${sym}${fmt(totals.totalCost,0)}`}/>
-        <StatCard label="Unrealised P&L" value={`${totals.pl>=0?"+":""}${sym}${fmt(Math.abs(totals.pl),0)}`} sub={pct(totals.pctReturn)} trend={totals.pl>=0?"up":"down"}/>
-        <StatCard label="Total txns" value={clientTxns.length.toLocaleString()} sub={`${equityH.length} holdings`}/>
+      {/* ── SUMMARY STATS ── */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:isMobile?8:10,marginBottom:isMobile?14:18}}>
+        <div style={{background:C.navy,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"15px 17px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.38)",marginBottom:5}}>Inception value</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:21,fontWeight:600,color:C.white,letterSpacing:-0.4}}>{sym}{fmt(totals.totalCost,0)}</div>
+        </div>
+        <div style={{background:C.navy,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"15px 17px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.38)",marginBottom:5}}>Current value</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:21,fontWeight:600,color:C.white,letterSpacing:-0.4}}>{sym}{fmt(totals.totalValue,0)}</div>
+        </div>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"15px 17px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:C.faint,marginBottom:5}}>Unrealised P&L</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:21,fontWeight:600,color:totals.pl>=0?C.green:C.red,letterSpacing:-0.4}}>{totals.pl>=0?"+":"-"}{sym}{fmt(Math.abs(totals.pl),0)}</div>
+          <div style={{fontSize:12,color:totals.pctReturn>=0?C.green:C.red,marginTop:3}}>{pct(totals.pctReturn)}</div>
+        </div>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"15px 17px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:C.faint,marginBottom:5}}>Risk profile</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:21,fontWeight:600,color:RISK_COLOURS[score]||C.teal,letterSpacing:-0.4}}>{score}/10</div>
+          <div style={{fontSize:12,color:C.faint,marginTop:3}}>{RISK_LABELS[score]}</div>
+        </div>
       </div>
 
-      <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.silver}`,marginBottom:18}}>
-        {["valuation","transactions","crm"].map(t=>(
-          <button key={t} onClick={()=>setTab(t)} style={{background:"none",border:"none",borderBottom:tab===t?`2px solid ${C.teal}`:"2px solid transparent",color:tab===t?C.teal:C.faint,fontSize:13,fontWeight:tab===t?600:400,cursor:"pointer",padding:"9px 16px",marginBottom:-1,textTransform:"capitalize"}}>
-            {t==="crm"?"CRM":t.charAt(0).toUpperCase()+t.slice(1)}
+      {/* ── TABS ── */}
+      <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.silver,marginBottom:18,overflowX:"auto"}}>
+        {[["valuation","Valuation"],["transactions","Transactions"],["risk","Risk & Rebalance"],["crm","CRM"]].map(([t,label])=>(
+          <button key={t} onClick={()=>setTab(t)} style={{background:"none",border:"none",borderBottom:tab===t?"2px solid "+C.teal:"2px solid transparent",color:tab===t?C.teal:C.faint,fontSize:13,fontWeight:tab===t?600:400,cursor:"pointer",padding:"9px 16px",marginBottom:-1,whiteSpace:"nowrap",fontFamily:"'Inter',sans-serif"}}>
+            {label}
           </button>
         ))}
       </div>
 
+      {/* ── VALUATION TAB ── */}
       {tab==="valuation"&&(
         <div>
           <div style={{background:C.navy,borderRadius:10,padding:"18px 22px",marginBottom:14}}>
-            <div style={{fontSize:10,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.38)",marginBottom:3}}>Portfolio value over time · {selectedCcy}</div>
+            <div style={{fontSize:10,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.38)",marginBottom:3}}>Portfolio value · {selectedCcy}</div>
             <ResponsiveContainer width="100%" height={170}>
               <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={C.teal} stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor={C.teal} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
+                <defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.teal} stopOpacity={0.3}/><stop offset="95%" stopColor={C.teal} stopOpacity={0}/></linearGradient></defs>
                 <XAxis dataKey="date" tick={{fontSize:10,fill:"rgba(255,255,255,0.35)"}}/>
-                <YAxis tick={{fontSize:9,fill:"rgba(255,255,255,0.35)"}} tickFormatter={v=>`${sym}${Math.round(v/1000)}k`}/>
-                <Tooltip formatter={v=>[`${sym}${fmt(v,0)}`,"Value"]} contentStyle={{background:C.navyMid,border:"none",borderRadius:6,fontSize:12}} labelStyle={{color:C.white}}/>
+                <YAxis tick={{fontSize:9,fill:"rgba(255,255,255,0.35)"}} tickFormatter={v=>sym+Math.round(v/1000)+"k"}/>
+                <Tooltip formatter={v=>[sym+fmt(v,0),"Value"]} contentStyle={{background:C.navyMid,border:"none",borderRadius:6,fontSize:12}} labelStyle={{color:C.white}}/>
                 <Area type="monotone" dataKey="value" stroke={C.teal} strokeWidth={2} fill="url(#grad)" dot={{fill:C.teal,r:3}}/>
               </AreaChart>
             </ResponsiveContainer>
           </div>
-
-          <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden"}}>
-            <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${C.silver}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
+            <div style={{padding:"12px 16px",borderBottom:"0.5px solid "+C.silver,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontSize:13,fontWeight:600,color:C.navy}}>Holdings</div>
               <Badge color="info">{holdings.length} positions</Badge>
             </div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                <thead>
-                  <tr style={{background:C.silver}}>
-                    {["Ticker","Description","CCY","Qty","Cost Value","Market Value","P&L","Return"].map(h=>(
-                      <th key={h} style={{padding:"8px 13px",textAlign:"left",fontSize:10,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <thead><tr style={{background:C.silver}}>{["Ticker","Description","CCY","Qty","Cost Value","Market Value","P&L","Return"].map(h=><th key={h} style={{padding:"8px 13px",textAlign:"left",fontSize:10,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                 <tbody>
                   {holdings.map((h,i)=>{
                     const cv=convertAmount(h.value,h.ccy,selectedCcy);
                     const cc=convertAmount(h.cost,h.ccy,selectedCcy);
                     const pl=cv-cc;const ret=calcPct(cc,cv);
                     return(
-                      <tr key={i} style={{borderBottom:`0.5px solid ${C.silver}`,background:i%2===0?C.white:"#FAFBFC"}}>
+                      <tr key={i} style={{borderBottom:"0.5px solid "+C.silver,background:i%2===0?C.white:"#FAFBFC"}}>
                         <td style={{padding:"9px 13px",fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,color:C.navy}}>{h.ticker}</td>
                         <td style={{padding:"9px 13px",color:C.text,maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
                         <td style={{padding:"9px 13px"}}><Badge color={h.ccy==="GBP"?"navy":"info"}>{h.ccy}</Badge></td>
                         <td style={{padding:"9px 13px",textAlign:"right",color:C.text}}>{h.isCash?"—":fmt(h.qty,0)}</td>
                         <td style={{padding:"9px 13px",textAlign:"right",color:C.text}}>{sym}{fmt(cc)}</td>
                         <td style={{padding:"9px 13px",textAlign:"right",fontWeight:600,color:C.navy}}>{sym}{fmt(cv)}</td>
-                        <td style={{padding:"9px 13px",textAlign:"right",color:pl>=0?C.green:C.red,fontWeight:600}}>{h.isCash?"—":`${pl>=0?"+":"-"}${sym}${fmt(Math.abs(pl))}`}</td>
+                        <td style={{padding:"9px 13px",textAlign:"right",color:pl>=0?C.green:C.red,fontWeight:600}}>{h.isCash?"—":(pl>=0?"+":"-")+sym+fmt(Math.abs(pl))}</td>
                         <td style={{padding:"9px 13px",textAlign:"right",color:ret>=0?C.green:C.red}}>{h.isCash?"—":pct(ret)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
-                <tfoot>
-                  <tr style={{background:C.navy}}>
-                    <td colSpan={4} style={{padding:"9px 13px",color:C.white,fontWeight:600}}>Total</td>
-                    <td style={{padding:"9px 13px",textAlign:"right",color:"rgba(255,255,255,0.5)"}}>{sym}{fmt(totals.totalCost,0)}</td>
-                    <td style={{padding:"9px 13px",textAlign:"right",color:C.white,fontWeight:700,fontFamily:"'Space Grotesk',sans-serif"}}>{sym}{fmt(totals.totalValue,0)}</td>
-                    <td style={{padding:"9px 13px",textAlign:"right",color:totals.pl>=0?"#34D399":"#F87171",fontWeight:600}}>{totals.pl>=0?"+":"-"}{sym}{fmt(Math.abs(totals.pl),0)}</td>
-                    <td style={{padding:"9px 13px",textAlign:"right",color:totals.pctReturn>=0?"#34D399":"#F87171",fontWeight:600}}>{pct(totals.pctReturn)}</td>
-                  </tr>
-                </tfoot>
+                <tfoot><tr style={{background:C.navy}}>
+                  <td colSpan={4} style={{padding:"9px 13px",color:C.white,fontWeight:600}}>Total</td>
+                  <td style={{padding:"9px 13px",textAlign:"right",color:"rgba(255,255,255,0.5)"}}>{sym}{fmt(totals.totalCost,0)}</td>
+                  <td style={{padding:"9px 13px",textAlign:"right",color:C.white,fontWeight:700,fontFamily:"'Space Grotesk',sans-serif"}}>{sym}{fmt(totals.totalValue,0)}</td>
+                  <td style={{padding:"9px 13px",textAlign:"right",color:totals.pl>=0?"#34D399":"#F87171",fontWeight:600}}>{totals.pl>=0?"+":"-"}{sym}{fmt(Math.abs(totals.pl),0)}</td>
+                  <td style={{padding:"9px 13px",textAlign:"right",color:totals.pctReturn>=0?"#34D399":"#F87171",fontWeight:600}}>{pct(totals.pctReturn)}</td>
+                </tr></tfoot>
               </table>
             </div>
           </div>
+
+          {/* ── PENDING WITHDRAWALS on valuation tab ── */}
+          {wdRequests.length>0&&(
+            <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden",marginTop:14}}>
+              <div style={{padding:"12px 16px",borderBottom:"0.5px solid "+C.silver,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FAFBFC"}}>
+                <div style={{fontSize:13,fontWeight:600,color:C.navy}}>Withdrawal requests</div>
+                <Badge color={wdRequests.filter(r=>r.status==="Pending").length>0?"warning":"success"}>{wdRequests.filter(r=>r.status==="Pending").length} pending</Badge>
+              </div>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead><tr style={{background:C.silver}}>{["ID","Date","Type","Amount","CCY","Status"].map(h=><th key={h} style={{padding:"7px 13px",textAlign:"left",fontSize:10,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase"}}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {wdRequests.map((r,i)=>(
+                    <tr key={r.id} style={{borderBottom:"0.5px solid "+C.silver,background:i%2===0?C.white:"#FAFBFC"}}>
+                      <td style={{padding:"8px 13px",fontFamily:"monospace",fontSize:10,color:C.faint}}>{r.id}</td>
+                      <td style={{padding:"8px 13px",color:C.text}}>{r.date}</td>
+                      <td style={{padding:"8px 13px",fontWeight:600,color:C.navy}}>{r.type}</td>
+                      <td style={{padding:"8px 13px",fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,color:C.navy,textAlign:"right"}}>{r.ccy==="GBP"?"£":"$"}{fmt(r.amount)}</td>
+                      <td style={{padding:"8px 13px"}}><Badge color={r.ccy==="GBP"?"navy":"info"}>{r.ccy}</Badge></td>
+                      <td style={{padding:"8px 13px"}}><Badge color={r.status==="Actioned"?"success":"warning"}>{r.status==="Actioned"?"Actioned":"Pending"}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
+      {/* ── TRANSACTIONS TAB ── */}
       {tab==="transactions"&&(
         <div>
           <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-            <input value={txSearch} onChange={e=>txSetSearch(e.target.value)} placeholder="Search all txn fields..." style={{flex:1,minWidth:180,padding:"7px 11px",border:`1.5px solid ${C.silver}`,borderRadius:6,fontSize:12,fontFamily:"'Inter',sans-serif",outline:"none"}}/>
-            <select onChange={e=>txSetFilter("txtype",e.target.value)} style={{padding:"7px 10px",border:`1.5px solid ${C.silver}`,borderRadius:6,fontSize:12,fontFamily:"'Inter',sans-serif",outline:"none",color:C.navy,background:C.white}}>
+            <input value={txSearch} onChange={e=>txSetSearch(e.target.value)} placeholder="Search transactions..." style={{flex:1,minWidth:150,padding:"7px 11px",border:"1.5px solid "+C.silver,borderRadius:6,fontSize:12,fontFamily:"'Inter',sans-serif",outline:"none"}}/>
+            <select onChange={e=>txSetFilter("txtype",e.target.value)} style={{padding:"7px 10px",border:"1.5px solid "+C.silver,borderRadius:6,fontSize:12,fontFamily:"'Inter',sans-serif",color:C.navy,background:C.white}}>
               <option value="all">All types</option>
               {txTypes.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
-            <select onChange={e=>txSetFilter("ticker",e.target.value)} style={{padding:"7px 10px",border:`1.5px solid ${C.silver}`,borderRadius:6,fontSize:12,fontFamily:"'Inter',sans-serif",outline:"none",color:C.navy,background:C.white}}>
+            <select onChange={e=>txSetFilter("ticker",e.target.value)} style={{padding:"7px 10px",border:"1.5px solid "+C.silver,borderRadius:6,fontSize:12,fontFamily:"'Inter',sans-serif",color:C.navy,background:C.white}}>
               <option value="all">All tickers</option>
               {tickers.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
-            <select onChange={e=>txSetFilter("ccy",e.target.value)} style={{padding:"7px 10px",border:`1.5px solid ${C.silver}`,borderRadius:6,fontSize:12,fontFamily:"'Inter',sans-serif",outline:"none",color:C.navy,background:C.white}}>
-              <option value="all">All CCY</option>
-              <option value="GBP">GBP</option>
-              <option value="USD">USD</option>
-            </select>
-            <div style={{fontSize:12,color:C.faint,display:"flex",alignItems:"center"}}>{txSorted.length.toLocaleString()} rows</div>
+            <span style={{fontSize:12,color:C.faint,display:"flex",alignItems:"center"}}>{txSorted.length} rows</span>
           </div>
-          <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden"}}>
-            <div style={{overflowX:"auto",maxHeight:500,overflowY:"auto"}}>
+          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
+            <div style={{overflowX:"auto",maxHeight:480,overflowY:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                 <thead style={{position:"sticky",top:0,zIndex:5}}>
                   <tr style={{background:C.navy}}>
-                    {[["tradedate","Trade Date"],["selector","Type"],["txtype","Tx Type"],["ticker","Ticker"],["description","Description"],["ccy","CCY"],["qty","Qty"],["consideration","Consideration"],["netamt","Net Amt"],["costprice","Cost Price"],["costvalue","Cost Value"]].map(([col,label])=>(
-                      <th key={col} onClick={()=>txToggle(col)} style={{padding:"8px 11px",textAlign:"left",fontSize:10,fontWeight:600,color:"rgba(255,255,255,0.6)",letterSpacing:0.8,textTransform:"uppercase",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>
+                    {[["tradedate","Date"],["txtype","Type"],["ticker","Ticker"],["description","Description"],["ccy","CCY"],["qty","Qty"],["consideration","Amount"],["netamt","Net"]].map(([col,label])=>(
+                      <th key={col} onClick={()=>txToggle(col)} style={{padding:"8px 11px",textAlign:"left",fontSize:10,fontWeight:600,color:"rgba(255,255,255,0.6)",letterSpacing:0.8,textTransform:"uppercase",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:C.navy}}>
                         {label}<SortIcon dir={txSort.col===col?txSort.dir:null}/>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {txSorted.slice(0,500).map((t,i)=>{
-                    const typeColor=t.txtype==="BUY"?"success":t.txtype==="SELL"?"error":t.txtype==="Dividend"?"gold":t.txtype.includes("Fee")?"warning":t.txtype==="Deposit"?"up":t.txtype==="Withdrawal"?"down":"info";
+                  {txSorted.slice(0,300).map((t,i)=>{
+                    const tc=t.txtype==="BUY"?"success":t.txtype==="SELL"?"error":t.txtype==="Dividend"?"gold":t.txtype.includes("Fee")||t.txtype==="SR Fee"?"warning":"info";
                     return(
-                      <tr key={t.id} style={{borderBottom:`0.5px solid ${C.silver}`,background:i%2===0?C.white:"#FAFBFC"}}>
-                        <td style={{padding:"7px 11px",color:C.text,whiteSpace:"nowrap"}}>{t.tradedate}</td>
-                        <td style={{padding:"7px 11px"}}><Badge color="navy">{t.selector}</Badge></td>
-                        <td style={{padding:"7px 11px"}}><Badge color={typeColor}>{t.txtype}</Badge></td>
-                        <td style={{padding:"7px 11px",fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,color:C.navy,whiteSpace:"nowrap"}}>{t.ticker}</td>
-                        <td style={{padding:"7px 11px",color:C.text,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.description}</td>
-                        <td style={{padding:"7px 11px"}}><Badge color={t.ccy==="GBP"?"navy":"info"}>{t.ccy}</Badge></td>
-                        <td style={{padding:"7px 11px",textAlign:"right",color:C.text}}>{t.qty!==0?fmt(Math.abs(t.qty),4):"—"}</td>
-                        <td style={{padding:"7px 11px",textAlign:"right",fontWeight:600,color:C.navy}}>{fmt(t.consideration)}</td>
-                        <td style={{padding:"7px 11px",textAlign:"right",color:t.netamt>=0?C.green:C.red,fontWeight:500}}>{fmt(t.netamt)}</td>
-                        <td style={{padding:"7px 11px",textAlign:"right",color:C.faint}}>{t.costprice!==0?fmt(t.costprice,4):"—"}</td>
-                        <td style={{padding:"7px 11px",textAlign:"right",color:C.faint}}>{t.costvalue!==0?fmt(t.costvalue):"—"}</td>
+                      <tr key={i} style={{borderBottom:"0.5px solid "+C.silver,background:i%2===0?C.white:"#FAFBFC"}}>
+                        <td style={{padding:"6px 11px",color:C.text,whiteSpace:"nowrap"}}>{t.tradedate}</td>
+                        <td style={{padding:"6px 11px"}}><Badge color={tc}>{t.txtype}</Badge></td>
+                        <td style={{padding:"6px 11px",fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,color:C.navy}}>{t.ticker}</td>
+                        <td style={{padding:"6px 11px",color:C.text,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.description}</td>
+                        <td style={{padding:"6px 11px"}}><Badge color={t.ccy==="GBP"?"navy":"info"}>{t.ccy}</Badge></td>
+                        <td style={{padding:"6px 11px",textAlign:"right",color:C.text}}>{t.qty!==0?fmt(Math.abs(t.qty),0):"—"}</td>
+                        <td style={{padding:"6px 11px",textAlign:"right",fontWeight:600,color:C.navy}}>{fmt(t.consideration)}</td>
+                        <td style={{padding:"6px 11px",textAlign:"right",color:t.netamt>=0?C.green:C.red}}>{fmt(t.netamt)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            {txSorted.length>500&&<div style={{padding:"10px 14px",fontSize:11,color:C.faint,borderTop:`0.5px solid ${C.silver}`}}>Showing 500 of {txSorted.length} rows. Use filters to narrow results.</div>}
+            {txSorted.length>300&&<div style={{padding:"8px 14px",fontSize:11,color:C.faint,borderTop:"0.5px solid "+C.silver}}>Showing 300 of {txSorted.length} rows — use filters to narrow</div>}
           </div>
         </div>
       )}
 
+      {/* ── RISK & REBALANCE TAB ── */}
+      {tab==="risk"&&(
+        <div>
+          {/* Risk profile card */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14,marginBottom:14}}>
+            <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:18}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase"}}>Risk profile</div>
+                <Btn small variant="ghost" onClick={()=>setEditingRisk(true)}>Edit</Btn>
+              </div>
+              <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:14}}>
+                <div style={{width:52,height:52,borderRadius:"50%",background:RISK_COLOURS[score]||C.teal,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontFamily:"'Space Grotesk',sans-serif",fontSize:22,fontWeight:700,flexShrink:0}}>{score}</div>
+                <div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:16,fontWeight:600,color:C.navy}}>{RISK_LABELS[score]}</div>
+                  <div style={{fontSize:11,color:C.faint,marginTop:2}}>Equity {RISK_MANDATES[score].equity[0]}-{RISK_MANDATES[score].equity[1]}% · FI {RISK_MANDATES[score].fi[0]}-{RISK_MANDATES[score].fi[1]}%</div>
+                  <div style={{fontSize:11,color:C.faint}}>Reviewed: {(profile&&profile.reviewed)||"Never"}</div>
+                </div>
+              </div>
+              <div style={{fontSize:12,color:C.text,lineHeight:1.6,fontStyle:"italic"}}>{(profile&&profile.notes)||"No suitability notes."}</div>
+              {/* Compliance flags */}
+              <div style={{marginTop:14,paddingTop:14,borderTop:"0.5px solid "+C.silver}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Compliance flags</div>
+                {comp&&comp.flags&&comp.flags.length===0&&<div style={{color:C.green,fontSize:13,fontWeight:500}}>&#10003; No breaches detected</div>}
+                {comp&&comp.flags&&comp.flags.length>0&&comp.flags.map((f,fi)=>(
+                  <div key={fi} style={{display:"flex",gap:8,marginBottom:6,padding:"7px 10px",background:f.type==="error"?C.redBg:C.amberBg,borderRadius:6}}>
+                    <span>{f.type==="error"?"🔴":"🟡"}</span>
+                    <span style={{fontSize:12,color:C.text,lineHeight:1.5}}>{f.msg}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Allocation bars */}
+            <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:18}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:14}}>Current vs mandate</div>
+              {comp&&["Equity","Fixed Income","Cash","Commodity"].map(ac=>{
+                const val=ac==="Equity"?comp.eqPct:ac==="Fixed Income"?comp.fiPct:ac==="Cash"?comp.cashPct:comp.comPct;
+                const range=RISK_MANDATES[score][ac==="Equity"?"equity":ac==="Fixed Income"?"fi":ac==="Cash"?"cash":"commodity"];
+                const breach=val<range[0]||val>range[1];
+                return(
+                  <div key={ac} style={{marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
+                      <span style={{fontWeight:breach?600:400,color:breach?C.red:C.navy}}>{ac}</span>
+                      <span style={{color:breach?C.red:C.faint}}>{val}% <span style={{color:C.faint,fontSize:11}}>(mandate {range[0]}-{range[1]}%)</span></span>
+                    </div>
+                    <div style={{height:6,background:C.silver,borderRadius:3,position:"relative"}}>
+                      <div style={{height:"100%",width:Math.min(val,100)+"%",background:breach?C.red:RISK_COLOURS[score]||C.teal,borderRadius:3}}/>
+                      <div style={{position:"absolute",top:0,height:"100%",width:2,left:range[1]+"%",background:"rgba(0,0,0,0.15)",borderRadius:1}}/>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Rebalance trades */}
+              {comp&&(()=>{
+                const total=holdings.reduce((s,h)=>s+convertAmount(h.value,h.ccy,selectedCcy),0);
+                const trades=["Equity","Fixed Income","Cash","Commodity"].map(ac=>{
+                  const cur=(comp.byClass[ac]||0);
+                  const m=RISK_MANDATES[score][ac==="Equity"?"equity":ac==="Fixed Income"?"fi":ac==="Cash"?"cash":"commodity"];
+                  const tgt=total*(m[0]+m[1])/2/100;
+                  return {ac,diff:tgt-cur};
+                }).filter(t=>Math.abs(t.diff)>500);
+                if(trades.length===0) return <div style={{marginTop:14,color:C.green,fontSize:13,fontWeight:500}}>&#10003; Portfolio within mandate — no rebalance needed</div>;
+                return(
+                  <div style={{marginTop:14,paddingTop:14,borderTop:"0.5px solid "+C.silver}}>
+                    <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Suggested trades</div>
+                    {trades.map((t,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:t.diff>=0?C.greenBg:C.redBg,borderRadius:6,marginBottom:6}}>
+                        <span style={{fontSize:12,fontWeight:600,color:C.navy}}>{t.ac}</span>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          <Badge color={t.diff>=0?"success":"error"}>{t.diff>=0?"BUY":"SELL"}</Badge>
+                          <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:t.diff>=0?C.green:C.red}}>{sym}{fmt(Math.abs(t.diff),0)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CRM TAB ── */}
       {tab==="crm"&&(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:14}}>
-          <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,padding:18}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 2fr",gap:14}}>
+          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:18}}>
             <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>Client profile</div>
-            {[["Full name",client.name],["Email",client.email],["Phone",client.phone],["Address",client.address],["Jurisdiction",client.jurisdiction],["Client since",client.joined],["Status",client.verified?"Verified":"Unverified"]].map(([l,v])=>(
-              <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`0.5px solid ${C.silver}`}}>
+            {[["Full name",client.name],["Email",client.email],["Phone",client.phone||"—"],["Address",client.address],["Jurisdiction",client.jurisdiction],["Client since",client.joined],["Status","Verified"]].map(([l,v])=>(
+              <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"0.5px solid "+C.silver}}>
                 <span style={{fontSize:12,color:C.faint}}>{l}</span>
                 <span style={{fontSize:12,fontWeight:500,color:C.navy}}>{v}</span>
               </div>
             ))}
           </div>
-          <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden"}}>
-            <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${C.silver}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
+            <div style={{padding:"12px 16px",borderBottom:"0.5px solid "+C.silver,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontSize:13,fontWeight:600,color:C.navy}}>Communication log</div>
-              <div style={{display:"flex",gap:6}}><Btn small onClick={()=>setShowEmail(true)} variant="ghost">✉ Email</Btn><Btn small onClick={()=>setShowLog(true)} variant="secondary">+ Log</Btn></div>
+              <div style={{display:"flex",gap:6}}>
+                <Btn small onClick={()=>setShowEmail(true)} variant="ghost">✉ Email</Btn>
+                <Btn small onClick={()=>setShowLog(true)} variant="secondary">+ Log</Btn>
+              </div>
             </div>
             <div style={{padding:"0 16px"}}>
               {comms.map((c,i)=>(
-                <div key={i} style={{padding:"12px 0",borderBottom:`0.5px solid ${C.silver}`}}>
+                <div key={i} style={{padding:"12px 0",borderBottom:"0.5px solid "+C.silver}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
                     <div style={{display:"flex",gap:7,alignItems:"center"}}>
                       <Badge color={c.type==="email"?"info":c.type==="call"?"success":c.type==="meeting"?"gold":"navy"}>{c.type}</Badge>
@@ -737,13 +881,87 @@ const ClientDetail=({clientId,onBack,selectedCcy})=>{
         </div>
       )}
 
-      {showEmail&&<Modal title={`Email ${client.name}`} onClose={()=>setShowEmail(false)}><div style={{fontSize:12,color:C.faint,marginBottom:14}}>To: {client.email}</div><FldInput label="Subject" value={emailSubject} onChange={setEmailSubject} placeholder="e.g. Q2 Portfolio Review"/><div style={{marginBottom:13}}><label style={{fontSize:11,fontWeight:600,color:C.text,display:"block",marginBottom:4}}>Message</label><textarea value={emailBody} onChange={e=>setEmailBody(e.target.value)} rows={5} style={{width:"100%",padding:"8px 11px",border:`1.5px solid ${C.silverMid}`,borderRadius:6,fontSize:13,fontFamily:"'Inter',sans-serif",resize:"vertical",boxSizing:"border-box"}}/></div><div style={{display:"flex",gap:7,justifyContent:"flex-end"}}><Btn variant="secondary" onClick={()=>setShowEmail(false)}>Cancel</Btn><Btn onClick={sendEmail}>Send email</Btn></div></Modal>}
-      {showLog&&<Modal title="Log communication" onClose={()=>setShowLog(false)}><FldSelect label="Type" value={logType} onChange={setLogType} options={[{value:"call",label:"Phone call"},{value:"email",label:"Email"},{value:"meeting",label:"Meeting"},{value:"note",label:"Internal note"}]}/><div style={{marginBottom:13}}><label style={{fontSize:11,fontWeight:600,color:C.text,display:"block",marginBottom:4}}>Notes</label><textarea value={logNote} onChange={e=>setLogNote(e.target.value)} rows={4} style={{width:"100%",padding:"8px 11px",border:`1.5px solid ${C.silverMid}`,borderRadius:6,fontSize:13,fontFamily:"'Inter',sans-serif",resize:"vertical",boxSizing:"border-box"}}/></div><div style={{display:"flex",gap:7,justifyContent:"flex-end"}}><Btn variant="secondary" onClick={()=>setShowLog(false)}>Cancel</Btn><Btn onClick={logComm}>Save</Btn></div></Modal>}
+      {/* ── MODALS ── */}
+      {showEmail&&<Modal title={"Email "+client.name} onClose={()=>setShowEmail(false)}>
+        <div style={{fontSize:12,color:C.faint,marginBottom:14}}>To: {client.email}</div>
+        <FldInput label="Subject" value={emailSubject} onChange={setEmailSubject} placeholder="e.g. Q2 Portfolio Review"/>
+        <div style={{marginBottom:13}}><label style={{fontSize:11,fontWeight:600,color:C.text,display:"block",marginBottom:4}}>Message</label><textarea value={emailBody} onChange={e=>setEmailBody(e.target.value)} rows={5} style={{width:"100%",padding:"8px 11px",border:"1.5px solid "+C.silverMid,borderRadius:6,fontSize:13,fontFamily:"'Inter',sans-serif",resize:"vertical",boxSizing:"border-box"}}/></div>
+        <div style={{display:"flex",gap:7,justifyContent:"flex-end"}}><Btn variant="secondary" onClick={()=>setShowEmail(false)}>Cancel</Btn><Btn onClick={sendEmail}>Send</Btn></div>
+      </Modal>}
+
+      {showLog&&<Modal title="Log communication" onClose={()=>setShowLog(false)}>
+        <FldSelect label="Type" value={logType} onChange={setLogType} options={[{value:"call",label:"Phone call"},{value:"email",label:"Email"},{value:"meeting",label:"Meeting"},{value:"note",label:"Internal note"}]}/>
+        <div style={{marginBottom:13}}><label style={{fontSize:11,fontWeight:600,color:C.text,display:"block",marginBottom:4}}>Notes</label><textarea value={logNote} onChange={e=>setLogNote(e.target.value)} rows={4} style={{width:"100%",padding:"8px 11px",border:"1.5px solid "+C.silverMid,borderRadius:6,fontSize:13,fontFamily:"'Inter',sans-serif",resize:"vertical",boxSizing:"border-box"}}/></div>
+        <div style={{display:"flex",gap:7,justifyContent:"flex-end"}}><Btn variant="secondary" onClick={()=>setShowLog(false)}>Cancel</Btn><Btn onClick={logComm}>Save</Btn></div>
+      </Modal>}
+
+      {showWD&&<Modal title="Withdrawal request" onClose={()=>{setShowWD(false);setWdError("");}}>
+        <div style={{background:C.navy,borderRadius:8,padding:"12px 16px",marginBottom:16,display:"flex",gap:12,alignItems:"center"}}>
+          <div style={{width:36,height:36,borderRadius:"50%",background:C.teal,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:14,fontWeight:700}}>{initials}</div>
+          <div><div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:14,fontWeight:600,color:C.white}}>{client.name}</div><div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>{client.id}</div></div>
+        </div>
+        <FldSelect label="Withdrawal type" value={wdType} onChange={setWdType} options={[
+          {value:"PCLS",label:"PCLS — Pension Commencement Lump Sum"},
+          {value:"Regular Withdrawal",label:"Regular withdrawal"},
+          {value:"Drawdown",label:"Drawdown"},
+          {value:"Flexi-Access Drawdown",label:"Flexi-access drawdown"},
+          {value:"UFPLS",label:"UFPLS — Uncrystallised Fund Pension Lump Sum"},
+          {value:"Full Surrender",label:"Full surrender"},
+          {value:"Partial Surrender",label:"Partial surrender"},
+          {value:"Ad Hoc",label:"Ad hoc withdrawal"},
+        ]}/>
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+          <FldInput label="Amount" value={wdAmount} onChange={setWdAmount} placeholder="5000.00" type="number"/>
+          <FldSelect label="CCY" value={wdCcy} onChange={setWdCcy} options={[{value:"GBP",label:"GBP £"},{value:"USD",label:"USD $"},{value:"EUR",label:"EUR €"},{value:"CNY",label:"CNY ¥"}]}/>
+        </div>
+        <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:600,color:C.text,display:"block",marginBottom:4}}>Notes (optional)</label><textarea value={wdNotes} onChange={e=>setWdNotes(e.target.value)} rows={3} placeholder="e.g. Transfer to Barclays account ending 4821" style={{width:"100%",padding:"8px 11px",border:"1.5px solid "+C.silverMid,borderRadius:6,fontSize:13,fontFamily:"'Inter',sans-serif",resize:"vertical",boxSizing:"border-box"}}/></div>
+        <div style={{background:C.silver,borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.text,lineHeight:1.7}}>Request will be logged with status <strong>Pending</strong> and written to the Google Sheets back-office log.</div>
+        {wdError&&<div style={{background:C.amberBg,border:"1px solid "+C.gold,borderRadius:6,padding:"10px 12px",fontSize:12,color:C.amber,marginBottom:12}}>{wdError}</div>}
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Btn variant="secondary" onClick={()=>{setShowWD(false);setWdError("");}}>Cancel</Btn><Btn onClick={submitWithdrawal} variant="dark">{wdSubmitting?"Submitting...":"Submit request"}</Btn></div>
+      </Modal>}
+
+      {showDocs&&<Modal title={"Documents — "+client.name} onClose={()=>setShowDocs(false)}>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+          {clientDocs.map(doc=>(
+            <div key={doc.id} style={{display:"flex",gap:12,alignItems:"center",padding:"10px 14px",background:C.silver,borderRadius:8}}>
+              <span style={{fontSize:22,flexShrink:0}}>{typeIcon[doc.type]||"📄"}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{doc.name}</div>
+                <div style={{display:"flex",gap:6,marginTop:4}}><Badge color={typeColour[doc.type]||"info"}>{doc.type}</Badge></div>
+                <div style={{fontSize:11,color:C.faint,marginTop:3}}>{doc.date} · {doc.size} · {doc.uploader}</div>
+              </div>
+              <Btn small variant="ghost">View</Btn>
+            </div>
+          ))}
+          {clientDocs.length===0&&<div style={{textAlign:"center",padding:20,color:C.faint,fontSize:13}}>No documents uploaded yet.</div>}
+        </div>
+        <div style={{borderTop:"0.5px solid "+C.silver,paddingTop:14,display:"flex",justifyContent:"flex-end",gap:8}}>
+          <Btn variant="secondary" onClick={()=>setShowDocs(false)}>Close</Btn>
+          <Btn variant="primary">+ Upload document</Btn>
+        </div>
+      </Modal>}
+
+      {editingRisk&&<Modal title="Edit risk profile" onClose={()=>setEditingRisk(false)}>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:14,fontWeight:600,color:C.navy,marginBottom:14}}>{client.name}</div>
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:11,fontWeight:600,color:C.text,display:"block",marginBottom:6}}>Risk score: <strong>{editScore} — {RISK_LABELS[editScore]}</strong></label>
+          <input type="range" min={1} max={10} value={editScore} onChange={e=>setEditScore(+e.target.value)} style={{width:"100%"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.faint,marginTop:4}}><span>1 Very Cautious</span><span>5 Moderate</span><span>10 Speculative</span></div>
+        </div>
+        <div style={{background:C.silver,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.text,marginBottom:14}}>
+          Mandate: Equity {RISK_MANDATES[editScore].equity[0]}-{RISK_MANDATES[editScore].equity[1]}% · Fixed Income {RISK_MANDATES[editScore].fi[0]}-{RISK_MANDATES[editScore].fi[1]}% · Cash max {RISK_MANDATES[editScore].cash[1]}%
+        </div>
+        <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:600,color:C.text,display:"block",marginBottom:4}}>Suitability notes</label><textarea value={editNotes} onChange={e=>setEditNotes(e.target.value)} rows={4} style={{width:"100%",padding:"8px 11px",border:"1.5px solid "+C.silverMid,borderRadius:6,fontSize:13,fontFamily:"'Inter',sans-serif",resize:"vertical",boxSizing:"border-box"}}/></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Btn variant="secondary" onClick={()=>setEditingRisk(false)}>Cancel</Btn>
+          <Btn onClick={()=>{setRiskProfiles({...riskProfiles,[clientId]:{...profile,score:editScore,notes:editNotes,reviewed:new Date().toISOString().slice(0,10)}});setEditingRisk(false);}}>Save</Btn>
+        </div>
+      </Modal>}
     </div>
   );
 };
 
-// ─── CLIENTS LIST ──────────────────────────────────────────────────
+
 const ClientsList=({selectedClient,setSelectedClient,selectedCcy})=>{
   const [search,setSearch]=useState("");
   const [showAdd,setShowAdd]=useState(false);
@@ -2026,15 +2244,9 @@ export default function App(){
       <div style={{flex:1,overflowY:"auto",paddingBottom:isMobile?68:0}}>
         {section==="dashboard"&&<Dashboard setSection={handleSection} setSelectedClient={setSelectedClient} selectedCcy={selectedCcy}/>}
         {section==="clients"&&<ClientsList selectedClient={selectedClient} setSelectedClient={setSelectedClient} selectedCcy={selectedCcy}/>}
-        {section==="transactions"&&<Transactions selectedCcy={selectedCcy}/>}
-        {section==="pricing"&&<Pricing selectedCcy={selectedCcy}/>}
-        {section==="valuations"&&<Valuations setSection={handleSection} setSelectedClient={setSelectedClient} selectedCcy={selectedCcy}/>}
-        {section==="ai"&&<AIAssistant selectedCcy={selectedCcy} selectedClient={selectedClient}/>}
-        {section==="risk"&&<RiskPage selectedCcy={selectedCcy} setSection={handleSection} setSelectedClient={setSelectedClient}/>}
-        {section==="rebalance"&&<RebalancePage selectedCcy={selectedCcy}/>}
         {section==="alerts"&&<AlertsPage setSection={handleSection} setSelectedClient={setSelectedClient}/>}
-        {section==="docs"&&<DocVaultPage/>}
-        {section==="withdrawals"&&<WithdrawalsPage/>}
+        {section==="pricing"&&<Pricing selectedCcy={selectedCcy}/>}
+        {section==="ai"&&<AIAssistant selectedCcy={selectedCcy} selectedClient={selectedClient}/>}
         {section==="news"&&<News/>}
         {section==="connect"&&<Connect/>}
       </div>
