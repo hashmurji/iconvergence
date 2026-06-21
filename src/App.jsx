@@ -503,6 +503,131 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
   );
 };
 
+// ─── GOOGLE SHEETS CONFIG ────────────────────────────────────────
+const SHEETS_CONFIG = { SPREADSHEET_ID: "", API_KEY: "", SHEET_NAME: "Withdrawals" };
+const sheetsConfigured = () => SHEETS_CONFIG.SPREADSHEET_ID && SHEETS_CONFIG.API_KEY;
+
+const appendToSheet = async (row) => {
+  if (!sheetsConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const url = "https://sheets.googleapis.com/v4/spreadsheets/"+SHEETS_CONFIG.SPREADSHEET_ID+"/values/"+SHEETS_CONFIG.SHEET_NAME+"!A:J:append?valueInputOption=USER_ENTERED&key="+SHEETS_CONFIG.API_KEY;
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values: [row] }) });
+    return res.ok ? { ok: true } : { ok: false, error: await res.text() };
+  } catch(e) { return { ok: false, error: e.message }; }
+};
+
+const readSheetStatuses = async () => {
+  if (!sheetsConfigured()) return {};
+  try {
+    const url = "https://sheets.googleapis.com/v4/spreadsheets/"+SHEETS_CONFIG.SPREADSHEET_ID+"/values/"+SHEETS_CONFIG.SHEET_NAME+"!A:J?key="+SHEETS_CONFIG.API_KEY;
+    const res = await fetch(url);
+    if (!res.ok) return {};
+    const data = await res.json();
+    const rows = (data.values || []).slice(1);
+    const map = {};
+    rows.forEach(r => { if (r[0]) map[r[0]] = r[9] || "Pending"; });
+    return map;
+  } catch(e) { return {}; }
+};
+
+// ─── SESSION STORAGE FOR WITHDRAWAL REQUESTS ─────────────────────
+const WD_KEY = "iconv_wd_requests";
+const loadRequests = async () => {
+  try {
+    const val = sessionStorage.getItem(WD_KEY);
+    return val ? JSON.parse(val) : [];
+  } catch(e) { return []; }
+};
+const saveRequests = async (reqs) => {
+  try { sessionStorage.setItem(WD_KEY, JSON.stringify(reqs)); } catch(e) {}
+};
+
+// ─── RISK & SUITABILITY DATA ──────────────────────────────────────
+const ASSET_CLASS = {
+  "GSPX":"Equity","VTI":"Equity","VWO":"Equity","VPL":"Equity","DBEU":"Equity",
+  "EMIM":"Equity","EUXS":"Equity","CUKX":"Equity","VAPX":"Equity","IJPH":"Equity",
+  "ARKK":"Equity","VYM":"Equity","LGLV":"Equity","BNDX":"Fixed Income",
+  "VCSH":"Fixed Income","SCHP":"Fixed Income","SCHO":"Fixed Income","IS15":"Fixed Income",
+  "GILS":"Fixed Income","ERNS":"Fixed Income","XGIG":"Fixed Income","AGBP":"Fixed Income",
+  "VGOV":"Fixed Income","SGOV":"Fixed Income","CSH2":"Cash","IAU":"Commodity",
+};
+const RISK_MANDATES = {
+  1:{label:"Very Cautious",equity:[0,20],fi:[60,100],cash:[0,40],commodity:[0,5]},
+  2:{label:"Cautious",equity:[0,30],fi:[55,85],cash:[0,35],commodity:[0,5]},
+  3:{label:"Cautious Balanced",equity:[10,40],fi:[45,75],cash:[0,30],commodity:[0,10]},
+  4:{label:"Balanced",equity:[20,50],fi:[35,65],cash:[0,25],commodity:[0,10]},
+  5:{label:"Moderate",equity:[30,60],fi:[25,55],cash:[0,25],commodity:[0,10]},
+  6:{label:"Moderate Growth",equity:[40,70],fi:[15,45],cash:[0,20],commodity:[0,15]},
+  7:{label:"Growth",equity:[50,80],fi:[10,35],cash:[0,15],commodity:[0,15]},
+  8:{label:"Aggressive Growth",equity:[60,90],fi:[0,25],cash:[0,10],commodity:[0,20]},
+  9:{label:"Aggressive",equity:[70,100],fi:[0,15],cash:[0,10],commodity:[0,20]},
+  10:{label:"Speculative",equity:[80,100],fi:[0,10],cash:[0,10],commodity:[0,25]},
+};
+const RISK_COLOURS = {1:"#1d4ed8",2:"#2563eb",3:"#0891b2",4:"#0d9488",5:"#059669",6:"#65a30d",7:"#ca8a04",8:"#d97706",9:"#dc2626",10:"#9f1239"};
+const RISK_LABELS = {1:"Very Cautious",2:"Cautious",3:"Cautious Balanced",4:"Balanced",5:"Moderate",6:"Moderate Growth",7:"Growth",8:"Aggressive Growth",9:"Aggressive",10:"Speculative"};
+
+const DEFAULT_RISK_PROFILES = {
+  "C00355633":{score:5,notes:"Moderate risk tolerance. Prefers global equity diversification. Review due Q3 2024.",reviewed:"2024-01-10"},
+  "C00356735":{score:4,notes:"Balanced mandate. Concerned about EM volatility. Reviewed post-rebalance Feb 2024.",reviewed:"2024-02-20"},
+  "C00355634":{score:6,notes:"Moderate growth. Comfortable with tactical positions (ARKK). Annual review due Oct 2024.",reviewed:"2024-01-05"},
+  "C00347223":{score:4,notes:"Balanced. Large cash position reflects near-term liquidity need. Review pending.",reviewed:"2024-04-01"},
+};
+
+const computeCompliance = (clientId, profiles) => {
+  const profile = profiles[clientId] || DEFAULT_RISK_PROFILES[clientId];
+  if (!profile) return null;
+  const mandate = RISK_MANDATES[profile.score];
+  const hs = HOLDINGS[clientId] || [];
+  const total = hs.reduce((s,h)=>s+h.value, 0);
+  if (!total) return null;
+  const byClass = {};
+  hs.forEach(h => { const ac = ASSET_CLASS[h.ticker]||"Other"; byClass[ac]=(byClass[ac]||0)+h.value; });
+  const getPct = ac => Math.round((byClass[ac]||0)/total*100);
+  const eqPct=getPct("Equity"), fiPct=getPct("Fixed Income"), cashPct=getPct("Cash"), comPct=getPct("Commodity");
+  const flags = [];
+  if (eqPct<mandate.equity[0]) flags.push({type:"warning",msg:"Equity "+eqPct+"% below mandate minimum of "+mandate.equity[0]+"%"});
+  if (eqPct>mandate.equity[1]) flags.push({type:"error",msg:"Equity "+eqPct+"% exceeds mandate maximum of "+mandate.equity[1]+"%"});
+  if (fiPct<mandate.fi[0]) flags.push({type:"warning",msg:"Fixed income "+fiPct+"% below mandate minimum of "+mandate.fi[0]+"%"});
+  if (fiPct>mandate.fi[1]) flags.push({type:"error",msg:"Fixed income "+fiPct+"% exceeds mandate maximum of "+mandate.fi[1]+"%"});
+  if (cashPct>mandate.cash[1]) flags.push({type:"warning",msg:"Cash "+cashPct+"% above mandate maximum of "+mandate.cash[1]+"%"});
+  if (comPct>mandate.commodity[1]) flags.push({type:"warning",msg:"Commodity "+comPct+"% exceeds mandate limit of "+mandate.commodity[1]+"%"});
+  return { eqPct, fiPct, cashPct, comPct, flags, mandate, byClass, total };
+};
+
+// ─── DEFAULT DOCS ────────────────────────────────────────────────
+const DEFAULT_DOCS = {
+  "C00355633":[
+    {id:1,name:"KYC Verification — Lightfoot.pdf",type:"KYC",date:"2020-10-01",size:"1.2 MB",uploader:"Admin"},
+    {id:2,name:"Suitability Letter 2024.pdf",type:"Suitability",date:"2024-01-10",size:"320 KB",uploader:"James White"},
+    {id:3,name:"Investment Mandate — Moderate.pdf",type:"Mandate",date:"2020-10-01",size:"245 KB",uploader:"Admin"},
+  ],
+  "C00356735":[
+    {id:1,name:"KYC — Starkie Verified.pdf",type:"KYC",date:"2021-02-15",size:"980 KB",uploader:"Admin"},
+    {id:2,name:"Suitability Assessment 2024.pdf",type:"Suitability",date:"2024-02-20",size:"410 KB",uploader:"James White"},
+    {id:3,name:"Risk Disclosure Statement.pdf",type:"Risk Disclosure",date:"2021-02-15",size:"190 KB",uploader:"Admin"},
+  ],
+  "C00355634":[
+    {id:1,name:"KYC — Chris Pauls.pdf",type:"KYC",date:"2020-10-01",size:"1.1 MB",uploader:"Admin"},
+    {id:2,name:"Moderate Growth Mandate.pdf",type:"Mandate",date:"2020-10-01",size:"260 KB",uploader:"Admin"},
+    {id:3,name:"Authorisation Letter 2024.pdf",type:"Authorisation",date:"2024-01-05",size:"155 KB",uploader:"James White"},
+  ],
+  "C00347223":[
+    {id:1,name:"KYC — Hash Murji.pdf",type:"KYC",date:"2020-09-01",size:"1.4 MB",uploader:"Admin"},
+    {id:2,name:"Balanced Mandate Agreement.pdf",type:"Mandate",date:"2020-09-01",size:"290 KB",uploader:"Admin"},
+    {id:3,name:"Suitability Review Q1 2024.pdf",type:"Suitability",date:"2024-04-01",size:"375 KB",uploader:"James White"},
+    {id:4,name:"Risk Disclosure — Signed.pdf",type:"Risk Disclosure",date:"2020-09-01",size:"185 KB",uploader:"Admin"},
+  ],
+};
+
+// ─── DEFAULT ALERTS ──────────────────────────────────────────────
+const buildDefaultAlerts = () => [
+  {id:1,clientId:"C00347223",client:"Hash Murji",type:"Concentration",severity:"warning",msg:"GSPX represents 14.3% of total portfolio — above 10% single-position threshold",triggered:"2024-06-01",status:"open"},
+  {id:2,clientId:"C00347223",client:"Hash Murji",type:"Mandate",severity:"error",msg:"Equity allocation 23% below balanced mandate minimum of 20%",triggered:"2024-05-28",status:"open"},
+  {id:3,clientId:"C00356735",client:"Lyndsey Starkie",type:"Cash",severity:"warning",msg:"Cash position 47.5% of portfolio — exceeds balanced mandate cash limit of 25%",triggered:"2024-06-01",status:"open"},
+  {id:4,clientId:"C00355634",client:"Chris Pauls",type:"Performance",severity:"info",msg:"DBEU down 15.3% from cost — consider reviewing European hedged position",triggered:"2024-05-20",status:"open"},
+  {id:5,clientId:"C00355633",client:"Michael Lightfoot",type:"Review",severity:"info",msg:"Annual suitability review due — last reviewed 10 Jan 2024",triggered:"2024-06-01",status:"open"},
+];
+
 // ─── CLIENT DETAIL ─────────────────────────────────────────────────
 const ClientDetail=({clientId,onBack,selectedCcy})=>{
   const isMobile=useIsMobile();
@@ -1450,98 +1575,13 @@ const Connect=()=>{
 
 
 // ─── RISK / ASSET CLASS DATA ──────────────────────────────────────
-const ASSET_CLASS = {
-  "GSPX":"Equity","VTI":"Equity","VWO":"Equity","VPL":"Equity","DBEU":"Equity",
-  "EMIM":"Equity","EUXS":"Equity","CUKX":"Equity","VAPX":"Equity","IJPH":"Equity",
-  "ARKK":"Equity","VYM":"Equity","LGLV":"Equity",
-  "BNDX":"Fixed Income","VCSH":"Fixed Income","SCHP":"Fixed Income","SCHO":"Fixed Income",
-  "IS15":"Fixed Income","GILS":"Fixed Income","ERNS":"Fixed Income","XGIG":"Fixed Income",
-  "AGBP":"Fixed Income","VGOV":"Fixed Income","SGOV":"Fixed Income",
-  "CSH2":"Cash","IAU":"Commodity",
-};
 
-const RISK_MANDATES = {
-  1:{label:"Very Cautious",    equity:[0,20],  fi:[60,100], cash:[0,40],  commodity:[0,5]},
-  2:{label:"Cautious",         equity:[0,30],  fi:[55,85],  cash:[0,35],  commodity:[0,5]},
-  3:{label:"Cautious Balanced",equity:[10,40], fi:[45,75],  cash:[0,30],  commodity:[0,10]},
-  4:{label:"Balanced",         equity:[20,50], fi:[35,65],  cash:[0,25],  commodity:[0,10]},
-  5:{label:"Moderate",         equity:[30,60], fi:[25,55],  cash:[0,25],  commodity:[0,10]},
-  6:{label:"Moderate Growth",  equity:[40,70], fi:[15,45],  cash:[0,20],  commodity:[0,15]},
-  7:{label:"Growth",           equity:[50,80], fi:[10,35],  cash:[0,15],  commodity:[0,15]},
-  8:{label:"Aggressive Growth",equity:[60,90], fi:[0,25],   cash:[0,10],  commodity:[0,20]},
-  9:{label:"Aggressive",       equity:[70,100],fi:[0,15],   cash:[0,10],  commodity:[0,20]},
-  10:{label:"Speculative",     equity:[80,100],fi:[0,10],   cash:[0,10],  commodity:[0,25]},
-};
-const RISK_COLOURS = {1:"#1d4ed8",2:"#2563eb",3:"#0891b2",4:"#0d9488",5:"#059669",6:"#65a30d",7:"#ca8a04",8:"#d97706",9:"#dc2626",10:"#9f1239"};
-const RISK_LABELS  = {1:"Very Cautious",2:"Cautious",3:"Cautious Balanced",4:"Balanced",5:"Moderate",6:"Moderate Growth",7:"Growth",8:"Aggressive Growth",9:"Aggressive",10:"Speculative"};
 
-const DEFAULT_RISK_PROFILES = {
-  "C00355633":{score:5,notes:"Moderate risk tolerance. Prefers global equity diversification. Review due Q3 2024.",reviewed:"2024-01-10"},
-  "C00356735":{score:4,notes:"Balanced mandate. Concerned about EM volatility. Reviewed post-rebalance meeting Feb 2024.",reviewed:"2024-02-20"},
-  "C00355634":{score:6,notes:"Moderate growth. Comfortable with tactical positions (ARKK). Annual review due Oct 2024.",reviewed:"2024-01-05"},
-  "C00347223":{score:4,notes:"Balanced. Large cash position reflects near-term liquidity need. Review pending.",reviewed:"2024-04-01"},
-};
 
-const computeCompliance = (clientId, profiles) => {
-  const profile = profiles[clientId] || DEFAULT_RISK_PROFILES[clientId];
-  if (!profile) return null;
-  const mandate = RISK_MANDATES[profile.score];
-  const hs = HOLDINGS[clientId] || [];
-  const total = hs.reduce((s,h)=>s+h.value, 0);
-  if (!total) return null;
-  const byClass = {};
-  hs.forEach(h => {
-    const ac = ASSET_CLASS[h.ticker] || "Other";
-    byClass[ac] = (byClass[ac]||0) + h.value;
-  });
-  const pct = ac => Math.round((byClass[ac]||0) / total * 100);
-  const flags = [];
-  const eqPct = pct("Equity");
-  const fiPct = pct("Fixed Income");
-  const cashPct = pct("Cash");
-  const comPct = pct("Commodity");
-  if (eqPct < mandate.equity[0]) flags.push({type:"warning",msg:`Equity ${eqPct}% is below mandate minimum of ${mandate.equity[0]}%`});
-  if (eqPct > mandate.equity[1]) flags.push({type:"error",  msg:`Equity ${eqPct}% exceeds mandate maximum of ${mandate.equity[1]}%`});
-  if (fiPct  < mandate.fi[0])    flags.push({type:"warning",msg:`Fixed income ${fiPct}% is below mandate minimum of ${mandate.fi[0]}%`});
-  if (fiPct  > mandate.fi[1])    flags.push({type:"error",  msg:`Fixed income ${fiPct}% exceeds mandate maximum of ${mandate.fi[1]}%`});
-  if (cashPct > mandate.cash[1]) flags.push({type:"warning",msg:`Cash ${cashPct}% is above mandate maximum of ${mandate.cash[1]}%`});
-  if (comPct  > mandate.commodity[1]) flags.push({type:"warning",msg:`Commodity ${comPct}% exceeds mandate limit of ${mandate.commodity[1]}%`});
-  return { eqPct, fiPct, cashPct, comPct, flags, mandate, byClass, total };
-};
 
 // ─── SAMPLE DOCS ───────────────────────────────────────────────────
-const DEFAULT_DOCS = {
-  "C00355633":[
-    {id:1,name:"KYC Verification — Lightfoot.pdf",type:"KYC",date:"2020-10-01",size:"1.2 MB",uploader:"Admin"},
-    {id:2,name:"Suitability Letter 2024.pdf",type:"Suitability",date:"2024-01-10",size:"320 KB",uploader:"James White"},
-    {id:3,name:"Investment Mandate — Moderate.pdf",type:"Mandate",date:"2020-10-01",size:"245 KB",uploader:"Admin"},
-  ],
-  "C00356735":[
-    {id:1,name:"KYC — Starkie Verified.pdf",type:"KYC",date:"2021-02-15",size:"980 KB",uploader:"Admin"},
-    {id:2,name:"Suitability Assessment 2024.pdf",type:"Suitability",date:"2024-02-20",size:"410 KB",uploader:"James White"},
-    {id:3,name:"Risk Disclosure Statement.pdf",type:"Risk Disclosure",date:"2021-02-15",size:"190 KB",uploader:"Admin"},
-  ],
-  "C00355634":[
-    {id:1,name:"KYC — Chris Pauls.pdf",type:"KYC",date:"2020-10-01",size:"1.1 MB",uploader:"Admin"},
-    {id:2,name:"Moderate Growth Mandate.pdf",type:"Mandate",date:"2020-10-01",size:"260 KB",uploader:"Admin"},
-    {id:3,name:"Authorisation Letter 2024.pdf",type:"Authorisation",date:"2024-01-05",size:"155 KB",uploader:"James White"},
-  ],
-  "C00347223":[
-    {id:1,name:"KYC — Hash Murji.pdf",type:"KYC",date:"2020-09-01",size:"1.4 MB",uploader:"Admin"},
-    {id:2,name:"Balanced Mandate Agreement.pdf",type:"Mandate",date:"2020-09-01",size:"290 KB",uploader:"Admin"},
-    {id:3,name:"Suitability Review Q1 2024.pdf",type:"Suitability",date:"2024-04-01",size:"375 KB",uploader:"James White"},
-    {id:4,name:"Risk Disclosure — Signed.pdf",type:"Risk Disclosure",date:"2020-09-01",size:"185 KB",uploader:"Admin"},
-  ],
-};
 
 // ─── DEFAULT ALERTS ────────────────────────────────────────────────
-const buildDefaultAlerts = () => [
-  {id:1,clientId:"C00347223",client:"Hash Murji",type:"Concentration",severity:"warning",msg:"GSPX represents 14.3% of total portfolio — above 10% single-position threshold",triggered:"2024-06-01",status:"open"},
-  {id:2,clientId:"C00347223",client:"Hash Murji",type:"Mandate",severity:"error",msg:"Equity allocation 23% below balanced mandate minimum of 20%",triggered:"2024-05-28",status:"open"},
-  {id:3,clientId:"C00356735",client:"Lyndsey Starkie",type:"Cash",severity:"warning",msg:"Cash position 47.5% of portfolio — exceeds balanced mandate cash limit of 25%",triggered:"2024-06-01",status:"open"},
-  {id:4,clientId:"C00355634",client:"Chris Pauls",type:"Performance",severity:"info",msg:"DBEU down 15.3% from cost — consider reviewing European hedged position",triggered:"2024-05-20",status:"open"},
-  {id:5,clientId:"C00355633",client:"Michael Lightfoot",type:"Review",severity:"info",msg:"Annual suitability review due — last reviewed 10 Jan 2024",triggered:"2024-06-01",status:"open"},
-];
 
 // ─── AI PORTFOLIO ASSISTANT ─────────────────────────────────────────
 const SUGGESTED_PROMPTS = [
