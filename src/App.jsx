@@ -1,5 +1,17 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, AreaChart, Area } from "recharts";
+// ─── MOBILE HOOK ─────────────────────────────────────────────────
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return isMobile;
+};
+
+
 
 // ─── i-CONVERGENCE BRAND ───────────────────────────────────────────
 const C = {
@@ -313,10 +325,10 @@ const Logo=({size=28})=>(
 );
 
 // ─── NAVIGATION ──────────────────────────────────────────────────
-const CCYSelector=({selectedCcy,onChange})=>(
-  <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.08)",borderRadius:7,padding:"2px 3px"}}>
+const CCYSelector=({selectedCcy,onChange,compact})=>(
+  <div style={{display:"flex",alignItems:"center",gap:compact?2:6,background:"rgba(255,255,255,0.08)",borderRadius:7,padding:"2px 3px"}}>
     {["USD","GBP","EUR","CNY"].map(c=>(
-      <button key={c} onClick={()=>onChange(c)} style={{background:selectedCcy===c?C.teal:"transparent",color:selectedCcy===c?C.white:"rgba(255,255,255,0.55)",border:"none",borderRadius:5,padding:"4px 9px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif",transition:"all 0.15s"}}>
+      <button key={c} onClick={()=>onChange(c)} style={{background:selectedCcy===c?C.teal:"transparent",color:selectedCcy===c?C.white:"rgba(255,255,255,0.55)",border:"none",borderRadius:5,padding:compact?"3px 6px":"4px 9px",fontSize:compact?11:12,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif",transition:"all 0.15s"}}>
         {c}
       </button>
     ))}
@@ -324,6 +336,8 @@ const CCYSelector=({selectedCcy,onChange})=>(
 );
 
 const Nav=({section,setSection,selectedCcy,setCcy})=>{
+  const isMobile=useIsMobile();
+  const [menuOpen,setMenuOpen]=useState(false);
   const items=[
     {key:"dashboard",label:"Dashboard",icon:"⊞"},
     {key:"clients",label:"Clients",icon:"👥"},
@@ -339,30 +353,74 @@ const Nav=({section,setSection,selectedCcy,setCcy})=>{
     {key:"news",label:"News",icon:"📡"},
     {key:"connect",label:"Connect",icon:"⚡"},
   ];
+  const handleNav=(key)=>{setSection(key);setMenuOpen(false);};
   return(
-    <div style={{background:C.navy,display:"flex",alignItems:"center",padding:"0 20px",height:54,gap:0,position:"sticky",top:0,zIndex:100,flexShrink:0,borderBottom:`1px solid rgba(0,184,176,0.15)`}}>
-      <div style={{marginRight:28,flexShrink:0}}>
-        <Logo size={24}/>
-      </div>
-      {items.map(i=>(
-        <button key={i.key} onClick={()=>setSection(i.key)} style={{background:"none",border:"none",color:section===i.key?C.teal:"rgba(255,255,255,0.5)",fontSize:13,fontWeight:section===i.key?600:400,cursor:"pointer",padding:"0 12px",height:"100%",borderBottom:section===i.key?`2px solid ${C.teal}`:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap"}}>
-          {i.label}
-        </button>
-      ))}
-      <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
-        <CCYSelector selectedCcy={selectedCcy} onChange={setCcy}/>
-        <div style={{width:1,height:24,background:"rgba(255,255,255,0.1)"}}/>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:7,height:7,borderRadius:"50%",background:C.teal}}/>
-          <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>Bloomberg</span>
+    <>
+      <div style={{background:C.navy,display:"flex",alignItems:"center",padding:"0 16px",height:54,position:"sticky",top:0,zIndex:200,flexShrink:0,borderBottom:"1px solid rgba(0,184,176,0.15)"}}>
+        <div style={{marginRight:isMobile?10:20,flexShrink:0}}>
+          <Logo size={isMobile?19:24}/>
         </div>
-        <div style={{width:32,height:32,borderRadius:"50%",background:C.teal,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:12,fontWeight:600}}>JW</div>
+        {!isMobile&&items.map(i=>(
+          <button key={i.key} onClick={()=>handleNav(i.key)} style={{background:"none",border:"none",color:section===i.key?C.teal:"rgba(255,255,255,0.5)",fontSize:12,fontWeight:section===i.key?600:400,cursor:"pointer",padding:"0 9px",height:"100%",borderBottom:section===i.key?"2px solid "+C.teal:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap",fontFamily:"'Inter',sans-serif"}}>
+            {i.label}
+          </button>
+        ))}
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:isMobile?8:12}}>
+          <CCYSelector selectedCcy={selectedCcy} onChange={setCcy} compact={isMobile}/>
+          {!isMobile&&<>
+            <div style={{width:1,height:24,background:"rgba(255,255,255,0.1)"}}/>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <div style={{width:7,height:7,borderRadius:"50%",background:C.teal}}/>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>Bloomberg</span>
+            </div>
+          </>}
+          <div style={{width:32,height:32,borderRadius:"50%",background:C.teal,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:12,fontWeight:600,flexShrink:0}}>JW</div>
+          {isMobile&&(
+            <button onClick={()=>setMenuOpen(o=>!o)} style={{background:"none",border:"none",cursor:"pointer",padding:6,display:"flex",flexDirection:"column",gap:5,width:36,height:36,alignItems:"center",justifyContent:"center"}}>
+              <div style={{width:22,height:2,background:C.white,transition:"transform 0.2s",transform:menuOpen?"rotate(45deg) translate(0,7px)":"none"}}/>
+              <div style={{width:22,height:2,background:C.white,opacity:menuOpen?0:1,transition:"opacity 0.15s"}}/>
+              <div style={{width:22,height:2,background:C.white,transition:"transform 0.2s",transform:menuOpen?"rotate(-45deg) translate(0,-7px)":"none"}}/>
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+      {isMobile&&menuOpen&&(
+        <>
+          <div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:190,top:54}}/>
+          <div style={{position:"fixed",top:54,left:0,right:0,background:C.navy,zIndex:195,borderBottom:"2px solid "+C.teal,boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
+            {items.map(i=>(
+              <button key={i.key} onClick={()=>handleNav(i.key)} style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:section===i.key?C.navyLight:"none",border:"none",borderBottom:"0.5px solid rgba(255,255,255,0.07)",color:section===i.key?C.teal:C.white,fontSize:15,fontWeight:section===i.key?600:400,cursor:"pointer",padding:"15px 20px",fontFamily:"'Inter',sans-serif",textAlign:"left",boxSizing:"border-box"}}>
+                <span style={{fontSize:20,width:28,textAlign:"center"}}>{i.icon}</span>
+                <span>{i.label}</span>
+                {section===i.key&&<div style={{marginLeft:"auto",width:6,height:6,borderRadius:"50%",background:C.teal}}/>}
+              </button>
+            ))}
+            <div style={{padding:"12px 20px",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:7,height:7,borderRadius:"50%",background:C.teal}}/>
+              <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>Bloomberg connected</span>
+            </div>
+          </div>
+        </>
+      )}
+      {isMobile&&(
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.navy,borderTop:"1px solid rgba(0,184,176,0.2)",display:"flex",zIndex:150,height:60}}>
+          {items.slice(0,4).map(i=>(
+            <button key={i.key} onClick={()=>handleNav(i.key)} style={{flex:1,background:section===i.key?"rgba(0,184,176,0.1)":"none",border:"none",borderTop:section===i.key?"2px solid "+C.teal:"2px solid transparent",color:section===i.key?C.teal:"rgba(255,255,255,0.45)",fontSize:9,fontWeight:section===i.key?600:400,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,fontFamily:"'Inter',sans-serif",padding:"4px 0"}}>
+              <span style={{fontSize:19,lineHeight:1}}>{i.icon}</span>
+              <span>{i.label}</span>
+            </button>
+          ))}
+          <button onClick={()=>setMenuOpen(o=>!o)} style={{flex:1,background:menuOpen?"rgba(0,184,176,0.1)":"none",border:"none",borderTop:menuOpen?"2px solid "+C.teal:"2px solid transparent",color:menuOpen?C.teal:"rgba(255,255,255,0.45)",fontSize:9,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,fontFamily:"'Inter',sans-serif",padding:"4px 0"}}>
+            <span style={{fontSize:19,lineHeight:1}}>☰</span>
+            <span>More</span>
+          </button>
+        </div>
+      )}
+    </>
   );
 };
 
-// ─── DASHBOARD ────────────────────────────────────────────────────
+
 const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
   const sym=CCY_SYMBOLS[selectedCcy]||"$";
   const totalAUM=CLIENTS.reduce((s,c)=>s+clientTotals(c.id,selectedCcy).totalValue,0);
