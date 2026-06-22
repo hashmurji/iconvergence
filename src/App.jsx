@@ -703,7 +703,7 @@ const readSheetStatuses = async () => {
 const MARKET_CONFIG = {
   // Yahoo Finance via RapidAPI (free tier: 500 req/month)
   // Get key at: rapidapi.com/apidojo/api/yahoo-finance1
-  YAHOO_RAPIDAPI_KEY: "",   // paste your RapidAPI key here
+  YAHOO_RAPIDAPI_KEY: "864d2aeb4bmsh0ca0c5c89d959a2p1d6377jsn1a4d5f29d738",   // paste your RapidAPI key here
   YAHOO_HOST: "yahoo-finance15.p.rapidapi.com",
 
   // Alpha Vantage (free tier: 25 req/day)
@@ -765,36 +765,43 @@ const setCacheEntry = (key, value) => {
 // ─── YAHOO FINANCE FETCHER ────────────────────────────────────────
 const fetchYahooQuotes = async (symbols) => {
   if (!MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) return null;
+  const prices = {};
   try {
-    const joined = symbols.join(",");
-    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/market/v2/get-quotes?region=US&symbols="+encodeURIComponent(joined);
-    const res = await fetch(url, {
-      headers: {
-        "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
-        "x-rapidapi-host": MARKET_CONFIG.YAHOO_HOST,
-      }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const quotes = (data.quoteResponse && data.quoteResponse.result) || [];
-    const prices = {};
-    quotes.forEach(q => {
-      prices[q.symbol] = {
-        price: q.regularMarketPrice,
-        change: q.regularMarketChange,
-        changePct: q.regularMarketChangePercent,
-        name: q.shortName || q.longName || q.symbol,
-        currency: q.currency,
-      };
-    });
-    return prices;
+    // yahoo-finance15 endpoint - fetch a batch via markets/quote
+    // Works one ticker at a time for this host
+    const keyTickers = symbols.slice(0, 10); // limit to 10 per call
+    for (const sym of keyTickers) {
+      try {
+        const type = sym.includes("=X") ? "CURRENCY" : sym.startsWith("^") ? "INDEX" : "STOCKS";
+        const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/api/v1/markets/quote?ticker="+encodeURIComponent(sym)+"&type="+type;
+        const res = await fetch(url, {
+          headers: {
+            "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
+            "x-rapidapi-host": MARKET_CONFIG.YAHOO_HOST,
+          }
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const body = data.body;
+        if (!body || body.length === 0) continue;
+        const q = body[0];
+        prices[sym] = {
+          price: parseFloat(q.regularMarketPrice || q.lastSalePrice || q.ask || 0),
+          change: parseFloat(q.regularMarketChange || q.change || 0),
+          changePct: parseFloat(q.regularMarketChangePercent || q.percentChange || 0),
+          name: q.shortName || q.longName || q.companyName || sym,
+          currency: q.currency || "USD",
+        };
+      } catch(e) { continue; }
+    }
+    return Object.keys(prices).length > 0 ? prices : null;
   } catch(e) { return null; }
 };
 
 const fetchYahooNews = async () => {
   if (!MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) return null;
   try {
-    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/news/v2/list?region=US&snippetCount=10&s=GSPX.L%2CEMIM.L%2CVTI%2CGBPUSD%3DX";
+    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/api/v1/markets/news?tickers=VTI%2CGSPX.L%2CEMIM.L%2CGBPUSD%3DX&type=ALL";
     const res = await fetch(url, {
       headers: {
         "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
@@ -803,13 +810,13 @@ const fetchYahooNews = async () => {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const items = (data.items && data.items.stream) || [];
+    const items = (data.body) || [];
     return items.slice(0,10).map((item,i) => ({
       id: i+1,
-      time: new Date(item.content && item.content.pubDate).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),
-      category: (item.content && item.content.finance && item.content.finance.stockTickers && item.content.finance.stockTickers[0] && item.content.finance.stockTickers[0].symbol) || "Markets",
-      headline: item.content && item.content.title,
-      source: "Yahoo Finance",
+      time: item.pubDate ? new Date(item.pubDate*1000).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) : "—",
+      category: (item.tickers && item.tickers[0]) || "Markets",
+      headline: item.title || item.summary,
+      source: item.source || "Yahoo Finance",
       tag: "LIVE",
     })).filter(n => n.headline);
   } catch(e) { return null; }
