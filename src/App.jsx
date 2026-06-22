@@ -698,6 +698,254 @@ const readSheetStatuses = async () => {
   } catch(e) { return {}; }
 };
 
+// ─── MARKET DATA CONFIG ───────────────────────────────────────────
+// Configure your preferred data source. Priority: Yahoo Finance → Alpha Vantage → Bloomberg → Static
+const MARKET_CONFIG = {
+  // Yahoo Finance via RapidAPI (free tier: 500 req/month)
+  // Get key at: rapidapi.com/apidojo/api/yahoo-finance1
+  YAHOO_RAPIDAPI_KEY: "",   // paste your RapidAPI key here
+  YAHOO_HOST: "yahoo-finance15.p.rapidapi.com",
+
+  // Alpha Vantage (free tier: 25 req/day)
+  // Get key at: alphavantage.co/support/#api-key
+  ALPHA_VANTAGE_KEY: "",    // paste your Alpha Vantage key here
+
+  // Bloomberg (paid - only if you have a Bloomberg API subscription)
+  BLOOMBERG_KEY: "",        // paste your Bloomberg API key here
+
+  // Which source to use: "yahoo" | "alphavantage" | "bloomberg" | "static"
+  PRIMARY_SOURCE: "static", // change to "yahoo" once you add your RapidAPI key
+
+  // Cache duration in minutes (avoids burning free tier quota)
+  CACHE_MINUTES: 15,
+};
+
+// Your portfolio tickers mapped to Yahoo Finance symbols
+const TICKER_MAP = {
+  // GBP-listed ETFs (London Stock Exchange)
+  "GSPX":  "GSPX.L",  "IS15":  "IS15.L",  "GILS":  "GILS.L",
+  "EMIM":  "EMIM.L",  "EUXS":  "EUXS.L",  "ERNS":  "ERNS.L",
+  "XGIG":  "XGIG.L",  "AGBP":  "AGBP.L",  "IJPH":  "IJPH.L",
+  "CSH2":  "CSH2.L",  "CUKX":  "CUKX.L",  "VGOV":  "VGOV.L",
+  // USD-listed ETFs (NYSE/NASDAQ)
+  "VTI":   "VTI",     "VWO":   "VWO",     "VPL":   "VPL",
+  "VCSH":  "VCSH",    "SCHP":  "SCHP",    "SCHO":  "SCHO",
+  "DBEU":  "DBEU",    "BNDX":  "BNDX",    "VAPX":  "VAPX",
+  "ARKK":  "ARKK",    "SGOV":  "SGOV",    "LGLV":  "LGLV",
+  "VYM":   "VYM",     "IAU":   "IAU",
+  // FX pairs
+  "GBPUSD": "GBPUSD=X", "GBPEUR": "GBPEUR=X",
+  "EURUSD": "EURUSD=X", "USDGBP": "USDGBP=X",
+  "USDCNY": "USDCNY=X",
+};
+
+// Index symbols for market snapshot
+const INDEX_MAP = {
+  "S&P 500":     "^GSPC",
+  "FTSE 100":    "^FTSE",
+  "Euro Stoxx":  "^STOXX50E",
+  "Nikkei 225":  "^N225",
+  "Hang Seng":   "^HSI",
+};
+
+// ─── MARKET DATA CACHE ────────────────────────────────────────────
+const _priceCache = {};
+const _cacheTime = {};
+
+const isCacheValid = (key) => {
+  if (!_cacheTime[key]) return false;
+  return (Date.now() - _cacheTime[key]) < MARKET_CONFIG.CACHE_MINUTES * 60 * 1000;
+};
+
+const setCacheEntry = (key, value) => {
+  _priceCache[key] = value;
+  _cacheTime[key] = Date.now();
+};
+
+// ─── YAHOO FINANCE FETCHER ────────────────────────────────────────
+const fetchYahooQuotes = async (symbols) => {
+  if (!MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) return null;
+  try {
+    const joined = symbols.join(",");
+    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/market/v2/get-quotes?region=US&symbols="+encodeURIComponent(joined);
+    const res = await fetch(url, {
+      headers: {
+        "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
+        "x-rapidapi-host": MARKET_CONFIG.YAHOO_HOST,
+      }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const quotes = (data.quoteResponse && data.quoteResponse.result) || [];
+    const prices = {};
+    quotes.forEach(q => {
+      prices[q.symbol] = {
+        price: q.regularMarketPrice,
+        change: q.regularMarketChange,
+        changePct: q.regularMarketChangePercent,
+        name: q.shortName || q.longName || q.symbol,
+        currency: q.currency,
+      };
+    });
+    return prices;
+  } catch(e) { return null; }
+};
+
+const fetchYahooNews = async () => {
+  if (!MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) return null;
+  try {
+    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/news/v2/list?region=US&snippetCount=10&s=GSPX.L%2CEMIM.L%2CVTI%2CGBPUSD%3DX";
+    const res = await fetch(url, {
+      headers: {
+        "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
+        "x-rapidapi-host": MARKET_CONFIG.YAHOO_HOST,
+      }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const items = (data.items && data.items.stream) || [];
+    return items.slice(0,10).map((item,i) => ({
+      id: i+1,
+      time: new Date(item.content && item.content.pubDate).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),
+      category: (item.content && item.content.finance && item.content.finance.stockTickers && item.content.finance.stockTickers[0] && item.content.finance.stockTickers[0].symbol) || "Markets",
+      headline: item.content && item.content.title,
+      source: "Yahoo Finance",
+      tag: "LIVE",
+    })).filter(n => n.headline);
+  } catch(e) { return null; }
+};
+
+// ─── ALPHA VANTAGE FETCHER ────────────────────────────────────────
+const fetchAlphaQuote = async (symbol) => {
+  if (!MARKET_CONFIG.ALPHA_VANTAGE_KEY) return null;
+  const cacheKey = "av_"+symbol;
+  if (isCacheValid(cacheKey)) return _priceCache[cacheKey];
+  try {
+    const url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol="+symbol+"&apikey="+MARKET_CONFIG.ALPHA_VANTAGE_KEY;
+    const res = await fetch(url);
+    const data = await res.json();
+    const q = data["Global Quote"];
+    if (!q || !q["05. price"]) return null;
+    const result = {
+      price: parseFloat(q["05. price"]),
+      change: parseFloat(q["09. change"]),
+      changePct: parseFloat(q["10. change percent"]),
+    };
+    setCacheEntry(cacheKey, result);
+    return result;
+  } catch(e) { return null; }
+};
+
+const fetchAlphaFX = async (fromCcy, toCcy) => {
+  if (!MARKET_CONFIG.ALPHA_VANTAGE_KEY) return null;
+  const cacheKey = "avfx_"+fromCcy+toCcy;
+  if (isCacheValid(cacheKey)) return _priceCache[cacheKey];
+  try {
+    const url = "https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency="+fromCcy+"&to_currency="+toCcy+"&apikey="+MARKET_CONFIG.ALPHA_VANTAGE_KEY;
+    const res = await fetch(url);
+    const data = await res.json();
+    const rate = data["Realtime Currency Exchange Rate"];
+    if (!rate) return null;
+    const result = { price: parseFloat(rate["5. Exchange Rate"]) };
+    setCacheEntry(cacheKey, result);
+    return result;
+  } catch(e) { return null; }
+};
+
+// ─── UNIFIED PRICE FETCHER ────────────────────────────────────────
+const fetchLivePrices = async (tickers) => {
+  const source = MARKET_CONFIG.PRIMARY_SOURCE;
+
+  if (source === "yahoo" && MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) {
+    const yahooSymbols = tickers.map(t => TICKER_MAP[t] || t).filter(Boolean);
+    const cacheKey = "yahoo_batch";
+    if (isCacheValid(cacheKey)) return _priceCache[cacheKey];
+    const prices = await fetchYahooQuotes(yahooSymbols);
+    if (prices) { setCacheEntry(cacheKey, prices); return prices; }
+  }
+
+  if (source === "alphavantage" && MARKET_CONFIG.ALPHA_VANTAGE_KEY) {
+    const prices = {};
+    // Alpha Vantage is one-at-a-time - fetch key tickers only to preserve quota
+    const keyTickers = tickers.slice(0, 5);
+    for (const ticker of keyTickers) {
+      const result = await fetchAlphaQuote(TICKER_MAP[ticker] || ticker);
+      if (result) prices[TICKER_MAP[ticker] || ticker] = result;
+    }
+    return Object.keys(prices).length > 0 ? prices : null;
+  }
+
+  return null; // falls back to static PRICES array
+};
+
+// ─── MARKET DATA HOOK ─────────────────────────────────────────────
+const useMarketData = () => {
+  const [livePrices, setLivePrices] = useState(null);
+  const [liveNews, setLiveNews] = useState(null);
+  const [marketStatus, setMarketStatus] = useState("static");
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const refresh = async () => {
+    setMarketStatus("loading");
+    const tickers = Object.keys(TICKER_MAP);
+
+    // Try Yahoo Finance first
+    if (MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) {
+      const yahooSymbols = [...new Set(tickers.map(t => TICKER_MAP[t]))];
+      const prices = await fetchYahooQuotes(yahooSymbols);
+      if (prices) {
+        setLivePrices(prices);
+        setMarketStatus("yahoo");
+        setLastUpdated(new Date());
+        // Also fetch news
+        const news = await fetchYahooNews();
+        if (news && news.length > 0) setLiveNews(news);
+        return;
+      }
+    }
+
+    // Fallback to Alpha Vantage
+    if (MARKET_CONFIG.ALPHA_VANTAGE_KEY) {
+      setMarketStatus("alphavantage");
+      // Fetch FX rates at minimum
+      const gbpusd = await fetchAlphaFX("GBP","USD");
+      const gbpeur = await fetchAlphaFX("GBP","EUR");
+      if (gbpusd || gbpeur) {
+        const prices = {};
+        if (gbpusd) prices["GBPUSD=X"] = gbpusd;
+        if (gbpeur) prices["GBPEUR=X"] = gbpeur;
+        setLivePrices(prices);
+        setLastUpdated(new Date());
+        return;
+      }
+    }
+
+    setMarketStatus("static");
+  };
+
+  useEffect(() => {
+    refresh();
+    // Auto-refresh every CACHE_MINUTES
+    const interval = setInterval(refresh, MARKET_CONFIG.CACHE_MINUTES * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Get price for a ticker (live or static fallback)
+  const getPrice = (ticker) => {
+    if (livePrices) {
+      const yahooSym = TICKER_MAP[ticker];
+      const liveData = livePrices[yahooSym] || livePrices[ticker];
+      if (liveData) return liveData.price;
+    }
+    // Static fallback from PRICES array
+    const staticEntry = PRICES.find(p => p.ticker === ticker);
+    return staticEntry ? staticEntry.price : null;
+  };
+
+  return { livePrices, liveNews, marketStatus, lastUpdated, refresh, getPrice };
+};
+
+
 // ─── SESSION STORAGE FOR WITHDRAWAL REQUESTS ─────────────────────
 const WD_KEY = "iconv_wd_requests";
 const loadRequests = async () => {
@@ -1562,39 +1810,113 @@ const Valuations=({setSection,setSelectedClient,selectedCcy})=>{
 
 // ─── NEWS (Bloomberg feed) ─────────────────────────────────────────
 const News=()=>{
+  const isMobile=useIsMobile();
   const [ticker,setTicker]=useState("all");
+  const {livePrices,liveNews,marketStatus,lastUpdated,refresh}=useMarketData();
+  const [refreshing,setRefreshing]=useState(false);
+
+  const handleRefresh=async()=>{
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
+
+  const sourceLabel = marketStatus==="yahoo"?"Yahoo Finance · Live" : marketStatus==="alphavantage"?"Alpha Vantage · Live" : marketStatus==="bloomberg"?"Bloomberg · Live" : "Static data · No API key configured";
+  const sourceColor = marketStatus==="static"?C.amber:C.teal;
+
+  // Use live news if available, otherwise use static
+  const newsItems = (liveNews && liveNews.length>0) ? liveNews : BLOOMBERG_NEWS;
   const allTickers=["all","FTSE","SPX","GBP","EMIM","GSPX","GILTS","XAU","NKY"];
-  const filtered=ticker==="all"?BLOOMBERG_NEWS:BLOOMBERG_NEWS.filter(n=>n.tag===ticker||n.category.includes(ticker));
+  const filtered=ticker==="all"?newsItems:newsItems.filter(n=>n.tag===ticker||n.category.includes(ticker));
+
+  // Build indices from live prices or static
+  const getIndexValue = (symbol, staticValue, staticPct) => {
+    if (livePrices && livePrices[symbol]) {
+      const d = livePrices[symbol];
+      return { value: d.price, pct: d.changePct, direction: d.changePct>=0?"up":"down" };
+    }
+    return { value: staticValue, pct: staticPct, direction: staticPct>=0?"up":"down" };
+  };
+
+  const indices = [
+    {...getIndexValue("^GSPC",5312.8,+0.35), name:"S&P 500",    ticker:"SPX"},
+    {...getIndexValue("^FTSE",8247.3,-0.15), name:"FTSE 100",   ticker:"UKX"},
+    {...getIndexValue("^STOXX50E",4921.6,+0.64), name:"Euro Stoxx", ticker:"SX5E"},
+    {...getIndexValue("^N225",38842.0,+1.09), name:"Nikkei 225", ticker:"NKY"},
+    {...getIndexValue("^HSI",18452.1,-0.48), name:"Hang Seng",   ticker:"HSI"},
+  ];
+
+  // Build risers/fallers from live prices for portfolio tickers
+  const portfolioTickers = ["ARKK","EMIM","VAPX","IAU","GSPX","DBEU","LGLV","CUKX","VYM","IJPH"];
+  const portfolioMoves = portfolioTickers.map(t=>{
+    const yahooSym = TICKER_MAP[t];
+    const live = livePrices && (livePrices[yahooSym]||livePrices[t]);
+    if (live && live.changePct !== undefined) {
+      return {ticker:t, name:(PRICES.find(p=>p.ticker===t)||{name:t}).name, pct:live.changePct, change:live.change};
+    }
+    return null;
+  }).filter(Boolean);
+
+  const risers = portfolioMoves.length>0
+    ? [...portfolioMoves].sort((a,b)=>b.pct-a.pct).slice(0,5)
+    : MARKET_DATA.risers;
+  const fallers = portfolioMoves.length>0
+    ? [...portfolioMoves].sort((a,b)=>a.pct-b.pct).slice(0,5)
+    : MARKET_DATA.fallers;
+
+  // FX rates from live or static
+  const getFX = (sym, staticRate) => {
+    if (livePrices && livePrices[sym]) return livePrices[sym].price;
+    return staticRate;
+  };
+  const fxRates = [
+    {pair:"GBP/USD", rate:getFX("GBPUSD=X",1.2618), change:+0.0042},
+    {pair:"GBP/EUR", rate:getFX("GBPEUR=X",1.1603), change:-0.0021},
+    {pair:"EUR/USD", rate:getFX("EURUSD=X",1.0875), change:+0.0031},
+    {pair:"USD/CNY", rate:getFX("USDCNY=X",7.2400), change:-0.0120},
+  ];
 
   return(
-    <div style={{padding:24}}>
-      <div style={{marginBottom:18}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:C.teal,animation:"pulse 2s infinite"}}/>
-          <div style={{fontSize:10,fontWeight:600,letterSpacing:3,color:C.teal,textTransform:"uppercase"}}>Bloomberg · Live feed</div>
+    <div style={{padding:isMobile?"12px 10px":24}}>
+      <div style={{marginBottom:isMobile?12:18}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3,flexWrap:"wrap"}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:sourceColor}}/>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:3,color:sourceColor,textTransform:"uppercase"}}>{sourceLabel}</div>
+          {lastUpdated&&<div style={{fontSize:10,color:C.faint}}>Updated {lastUpdated.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>}
+          <button onClick={handleRefresh} style={{background:"none",border:"1px solid "+C.silver,borderRadius:5,padding:"2px 8px",fontSize:11,cursor:"pointer",color:C.faint,fontFamily:"'Inter',sans-serif"}}>{refreshing?"Refreshing...":"↻ Refresh"}</button>
         </div>
-        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:22,fontWeight:600,color:C.navy}}>Market news & intelligence</div>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?18:22,fontWeight:600,color:C.navy}}>Market news & intelligence</div>
+        {marketStatus==="static"&&(
+          <div style={{marginTop:8,background:C.amberBg,border:"1px solid "+C.gold,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.amber}}>
+            <strong>No live data source connected.</strong> Add a Yahoo Finance RapidAPI key or Alpha Vantage key in <code>MARKET_CONFIG</code> (top of App.jsx) to enable live prices and news.
+          </div>
+        )}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16,marginBottom:16}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:isMobile?10:16,marginBottom:16}}>
         <div>
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
             {allTickers.map(t=>(
-              <button key={t} onClick={()=>setTicker(t)} style={{background:ticker===t?C.navy:C.white,color:ticker===t?C.white:C.text,border:`0.5px solid ${ticker===t?C.navy:C.silver}`,borderRadius:6,padding:"5px 12px",fontSize:11,fontWeight:ticker===t?600:400,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>
+              <button key={t} onClick={()=>setTicker(t)} style={{background:ticker===t?C.navy:C.white,color:ticker===t?C.white:C.text,border:"0.5px solid "+(ticker===t?C.navy:C.silver),borderRadius:6,padding:"5px 12px",fontSize:11,fontWeight:ticker===t?600:400,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>
                 {t==="all"?"All":t}
               </button>
             ))}
           </div>
-          <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden"}}>
-            <div style={{padding:"10px 16px",borderBottom:`0.5px solid ${C.silver}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FAFBFC"}}>
+          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
+            <div style={{padding:"10px 16px",borderBottom:"0.5px solid "+C.silver,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FAFBFC"}}>
               <div style={{fontSize:12,fontWeight:600,color:C.navy}}>Headlines</div>
-              <div style={{fontSize:11,color:C.faint}}>Updated {new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>
+              <div style={{fontSize:11,color:C.faint}}>{filtered.length} articles</div>
             </div>
-            {filtered.map(n=>(
-              <div key={n.id} style={{padding:"14px 16px",borderBottom:`0.5px solid ${C.silver}`,display:"flex",gap:14,alignItems:"flex-start"}}>
-                <div style={{fontSize:11,color:C.faint,whiteSpace:"nowrap",minWidth:38}}>{n.time}</div>
+            {filtered.length===0?(
+              <div style={{padding:32,textAlign:"center",color:C.faint,fontSize:13}}>No articles for this filter.</div>
+            ):filtered.map((n,i)=>(
+              <div key={n.id||i} style={{padding:"14px 16px",borderBottom:"0.5px solid "+C.silver,display:"flex",gap:14,alignItems:"flex-start"}}>
+                <div style={{fontSize:11,color:C.faint,whiteSpace:"nowrap",minWidth:38}}>{n.time||"—"}</div>
                 <div style={{flex:1}}>
-                  <div style={{display:"flex",gap:7,marginBottom:5}}><Badge color="navy">{n.category}</Badge><Badge color="info">{n.tag}</Badge></div>
+                  <div style={{display:"flex",gap:7,marginBottom:5,flexWrap:"wrap"}}>
+                    <Badge color="navy">{n.category}</Badge>
+                    <Badge color={n.tag==="LIVE"?"success":"info"}>{n.tag}</Badge>
+                  </div>
                   <div style={{fontSize:13,fontWeight:500,color:C.navy,lineHeight:1.5}}>{n.headline}</div>
                   <div style={{fontSize:11,color:C.faint,marginTop:3}}>{n.source}</div>
                 </div>
@@ -1604,9 +1926,9 @@ const News=()=>{
 
           <div style={{marginTop:14}}>
             <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Key market trends</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
               {MARKET_DATA.trends.map((t,i)=>(
-                <div key={i} style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,padding:16}}>
+                <div key={i} style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:16}}>
                   <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:13,fontWeight:600,color:C.navy,marginBottom:7}}>{t.title}</div>
                   <div style={{fontSize:12,color:C.text,lineHeight:1.7}}>{t.body}</div>
                 </div>
@@ -1616,54 +1938,54 @@ const News=()=>{
         </div>
 
         <div>
-          <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden",marginBottom:12}}>
-            <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${C.silver}`,background:C.navy}}>
+          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden",marginBottom:12}}>
+            <div style={{padding:"10px 14px",borderBottom:"0.5px solid "+C.silver,background:C.navy}}>
               <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",letterSpacing:1,textTransform:"uppercase"}}>Global indices</div>
             </div>
-            {MARKET_DATA.indices.map(i=>(
-              <div key={i.ticker} style={{padding:"11px 14px",borderBottom:`0.5px solid ${C.silver}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            {indices.map(i=>(
+              <div key={i.ticker} style={{padding:"11px 14px",borderBottom:"0.5px solid "+C.silver,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{i.name}</div>
                   <div style={{fontSize:10,color:C.faint}}>{i.ticker}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:13,fontWeight:600,color:C.navy}}>{i.value.toLocaleString()}</div>
-                  <div style={{fontSize:11,fontWeight:600,color:i.direction==="up"?C.green:C.red}}>{i.direction==="up"?"▲":"▼"} {Math.abs(i.pct).toFixed(2)}%</div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:13,fontWeight:600,color:C.navy}}>{i.value&&i.value.toLocaleString()}</div>
+                  <div style={{fontSize:11,fontWeight:600,color:i.direction==="up"?C.green:C.red}}>{i.direction==="up"?"▲":"▼"} {i.pct&&Math.abs(i.pct).toFixed(2)}%</div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden"}}>
-              <div style={{padding:"9px 12px",borderBottom:`0.5px solid ${C.silver}`,background:C.greenBg}}>
-                <div style={{fontSize:11,fontWeight:600,color:C.green,letterSpacing:1,textTransform:"uppercase"}}>▲ Top risers</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
+              <div style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver,background:C.greenBg}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.green,letterSpacing:1,textTransform:"uppercase"}}>▲ Risers</div>
               </div>
-              {MARKET_DATA.risers.map(r=>(
-                <div key={r.ticker} style={{padding:"9px 12px",borderBottom:`0.5px solid ${C.silver}`}}>
+              {risers.map(r=>(
+                <div key={r.ticker} style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver}}>
                   <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:12,fontWeight:700,color:C.navy}}>{r.ticker}</div>
                   <div style={{fontSize:10,color:C.faint,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
-                  <div style={{fontSize:12,fontWeight:600,color:C.green}}>+{r.pct}%</div>
+                  <div style={{fontSize:12,fontWeight:600,color:C.green}}>+{Math.abs(r.pct).toFixed(2)}%</div>
                 </div>
               ))}
             </div>
-            <div style={{background:C.white,border:`0.5px solid ${C.silver}`,borderRadius:10,overflow:"hidden"}}>
-              <div style={{padding:"9px 12px",borderBottom:`0.5px solid ${C.silver}`,background:C.redBg}}>
-                <div style={{fontSize:11,fontWeight:600,color:C.red,letterSpacing:1,textTransform:"uppercase"}}>▼ Top fallers</div>
+            <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
+              <div style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver,background:C.redBg}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.red,letterSpacing:1,textTransform:"uppercase"}}>▼ Fallers</div>
               </div>
-              {MARKET_DATA.fallers.map(r=>(
-                <div key={r.ticker} style={{padding:"9px 12px",borderBottom:`0.5px solid ${C.silver}`}}>
+              {fallers.map(r=>(
+                <div key={r.ticker} style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver}}>
                   <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:12,fontWeight:700,color:C.navy}}>{r.ticker}</div>
                   <div style={{fontSize:10,color:C.faint,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
-                  <div style={{fontSize:12,fontWeight:600,color:C.red}}>{r.pct}%</div>
+                  <div style={{fontSize:12,fontWeight:600,color:C.red}}>{r.pct.toFixed(2)}%</div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{background:C.navy,borderRadius:10,padding:16,marginTop:12}}>
-            <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>FX rates</div>
-            {[{pair:"GBP/USD",rate:1.2618,change:+0.0042},{pair:"GBP/EUR",rate:1.1603,change:-0.0021},{pair:"EUR/USD",rate:1.0875,change:+0.0031},{pair:"USD/CNY",rate:7.2400,change:-0.0120}].map(f=>(
+          <div style={{background:C.navy,borderRadius:10,padding:16}}>
+            <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>FX rates {marketStatus!=="static"&&<span style={{color:C.teal,fontSize:10}}>· Live</span>}</div>
+            {fxRates.map(f=>(
               <div key={f.pair} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
                 <span style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>{f.pair}</span>
                 <div style={{display:"flex",gap:8}}>
@@ -1679,7 +2001,7 @@ const News=()=>{
   );
 };
 
-// ─── CONNECT ───────────────────────────────────────────────────────
+
 const Connect=()=>{
   const [connected,setConnected]=useState(["bloomberg"]);
   const [showModal,setShowModal]=useState(null);
