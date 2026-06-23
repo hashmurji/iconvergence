@@ -629,9 +629,8 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
             {/* Mobile: horizontal scrolling client banner */}
       {isMobile ? (
         <div style={{marginBottom:14,marginLeft:-12,marginRight:-12}}>
-          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none",paddingLeft:12,paddingRight:12,paddingBottom:6}}>
-            <style>{".client-scroll::-webkit-scrollbar{display:none}"}</style>
-            <div className="client-scroll" style={{display:"flex",gap:10,width:"max-content"}}>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none",paddingLeft:12,paddingRight:12,paddingBottom:6,WebkitScrollbar:"none"}}>
+            <div style={{display:"flex",gap:10,width:"max-content"}}>
               {CLIENTS.map(c=>{
                 const t=clientTotals(c.id,selectedCcy);
                 return(
@@ -2877,7 +2876,6 @@ const LoginScreen = ({ onLogin, loading, error }) => (
         i-Convergence Financial Platform · Powered by Auth0
       </div>
     </div>
-    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
   </div>
 );
 
@@ -3511,7 +3509,6 @@ export default function App(){
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:32,fontWeight:700,color:C.white,marginBottom:20}}><span style={{color:C.teal}}>i-</span>Convergence</div>
           <div style={{width:32,height:32,border:"3px solid rgba(0,184,176,0.3)",borderTop:"3px solid "+C.teal,borderRadius:"50%",animation:"spin 0.8s linear infinite",margin:"0 auto"}}/>
         </div>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     );
   }
