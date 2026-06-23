@@ -598,6 +598,7 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
 
 
 const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
+  const isMobile=useIsMobile();
   const sym=CCY_SYMBOLS[selectedCcy]||"$";
   const totalAUM=CLIENTS.reduce((s,c)=>s+clientTotals(c.id,selectedCcy).totalValue,0);
   const totalCost=CLIENTS.reduce((s,c)=>s+clientTotals(c.id,selectedCcy).totalCost,0);
