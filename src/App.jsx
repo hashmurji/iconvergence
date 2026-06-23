@@ -208,7 +208,7 @@ const convertAmount = (amount, fromCcy, toCcy) => {
   return amount * toUSD * fromUSD;
 };
 
-const CCY_SYMBOLS = { USD: "$", GBP: "GBP", EUR: "EUR", CNY: "CNY" };
+const CCY_SYMBOLS = { USD: "$", GBP: "£", EUR: "€", CNY: "¥" };
 
 // --- ALL TRANSACTIONS (1283 rows from Excel) -------------------------
 // Fields: [sel, tradedate, settdate, clientId, txtype, ticker, desc, ccy, qty, consideration, netamt, costprice, costvalue]
@@ -506,15 +506,15 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
   const isMobile=useIsMobile();
   const [menuOpen,setMenuOpen]=useState(false);
   const items=[
-    {key:"dashboard",label:"Dashboard",icon:"#"},
-    {key:"clients",label:"Clients",icon:"CC"},
-    {key:"alerts",label:"Alerts",icon:"!"},
-    {key:"pricing",label:"Pricing",icon:"*"},
-    {key:"ai",label:"AI Insights",icon:"*"},
-    {key:"news",label:"News",icon:"~"},
-    {key:"connect",label:"Connect",icon:"!"},
-    {key:"trustee",label:"Trustee",icon:"T"},
-    {key:"users",label:"Users",icon:"U"},
+    {key:"dashboard",label:"Dashboard",icon:"⊞"},
+    {key:"clients",label:"Clients",icon:"👤"},
+    {key:"alerts",label:"Alerts",icon:"🔔"},
+    {key:"pricing",label:"Pricing",icon:"📈"},
+    {key:"ai",label:"AI Insights",icon:"✦"},
+    {key:"news",label:"News",icon:"📰"},
+    {key:"connect",label:"Connect",icon:"⚡"},
+    {key:"trustee",label:"Trustee",icon:"🔐"},
+    {key:"users",label:"Users",icon:"👥"},
   ];
   const handleNav=(key)=>{setSection(key);setMenuOpen(false);};
   return(
@@ -627,7 +627,7 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <StatCard label="Active clients" value="4" dark/>
           <StatCard label="Total transactions" value={totalTxns.toLocaleString()} dark/>
-          <StatCard label="Lifetime dividends" value={sym+fmt(totalDivs,0)} dark/>
+          <StatCard label="Avg. return" value={pct(calcPct(totalCost,totalAUM))} sub="across all clients" trend={totalPL>=0?"up":"down"} dark/>
           <StatCard label="Compliance" value="100%" sub="4 of 4 verified" trend="up" dark/>
         </div>
       </div>
@@ -709,10 +709,10 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14,marginBottom:14}}>
         <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:18}}>
           <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:14}}>AUM by client ({selectedCcy})</div>
-          <ResponsiveContainer width="100%" height={150}>
+          <ResponsiveContainer width="100%" height={isMobile?180:150}>
             <BarChart data={CLIENTS.map(c=>({name:c.name.split(" ")[0],val:Math.round(clientTotals(c.id,selectedCcy).totalValue*0.001)}))}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.silver}/>
               <XAxis dataKey="name" tick={{fontSize:11,fill:C.faint}}/>
@@ -729,7 +729,7 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
               <span style={{fontSize:12,fontWeight:600,color:C.navy}}>{i.name}</span>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
                 <span style={{fontFamily:"Space Grotesk,sans-serif",fontSize:13,fontWeight:600,color:C.navy}}>{i.value.toLocaleString()}</span>
-                <span style={{fontSize:12,color:dirColor(i.direction),fontWeight:600}}>{i.direction==="up"?"^":"v"} {Math.abs(i.pct).toFixed(2)}%</span>
+                <span style={{fontSize:12,color:dirColor(i.direction),fontWeight:600}}>{i.direction==="up"?"^":"v"} {Math.abs(i.pct).toFixed(2)+"%"}</span>
               </div>
             </div>
           ))}
