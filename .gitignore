@@ -22,7 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-index.html
-index.html
 .vercel
 .env*
