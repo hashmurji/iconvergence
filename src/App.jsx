@@ -508,6 +508,7 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
     {key:"ai",label:"AI Insights",icon:"✦"},
     {key:"news",label:"News",icon:"📡"},
     {key:"connect",label:"Connect",icon:"⚡"},
+    {key:"trustee",label:"Trustee",icon:"🏛"},
     {key:"users",label:"Users",icon:"👤"},
   ];
   const handleNav=(key)=>{setSection(key);setMenuOpen(false);};
@@ -517,7 +518,11 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
         <div style={{marginRight:isMobile?10:20,flexShrink:0}}>
           <Logo size={isMobile?19:24}/>
         </div>
-        {!isMobile&&items.map(i=>(
+        {!isMobile&&items.filter(i=>{
+          if(i.key==="trustee") return user && (user.roles||[]).includes("trustee");
+          if(i.key==="users")   return user && user.isAdviser;
+          return true;
+        }).map(i=>(
           <button key={i.key} onClick={()=>handleNav(i.key)} style={{background:"none",border:"none",color:section===i.key?C.teal:"rgba(255,255,255,0.5)",fontSize:12,fontWeight:section===i.key?600:400,cursor:"pointer",padding:"0 9px",height:"100%",borderBottom:section===i.key?"2px solid "+C.teal:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap",fontFamily:"'Inter',sans-serif"}}>
             {i.label}
           </button>
@@ -550,7 +555,11 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
         <>
           <div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:190,top:54}}/>
           <div style={{position:"fixed",top:54,left:0,right:0,background:C.navy,zIndex:195,borderBottom:"2px solid "+C.teal,boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
-            {items.map(i=>(
+            {items.filter(i=>{
+              if(i.key==="trustee") return user && (user.roles||[]).includes("trustee");
+              if(i.key==="users")   return user && user.isAdviser;
+              return true;
+            }).map(i=>(
               <button key={i.key} onClick={()=>handleNav(i.key)} style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:section===i.key?C.navyLight:"none",border:"none",borderBottom:"0.5px solid rgba(255,255,255,0.07)",color:section===i.key?C.teal:C.white,fontSize:15,fontWeight:section===i.key?600:400,cursor:"pointer",padding:"15px 20px",fontFamily:"'Inter',sans-serif",textAlign:"left",boxSizing:"border-box"}}>
                 <span style={{fontSize:20,width:28,textAlign:"center"}}>{i.icon}</span>
                 <span>{i.label}</span>
@@ -703,8 +712,8 @@ const readSheetStatuses = async () => {
 const MARKET_CONFIG = {
   // Yahoo Finance via RapidAPI (free tier: 500 req/month)
   // Get key at: rapidapi.com/apidojo/api/yahoo-finance1
-  YAHOO_RAPIDAPI_KEY: "864d2aeb4bmsh0ca0c5c89d959a2p1d6377jsn1a4d5f29d738",   // paste your RapidAPI key here
-  YAHOO_HOST: "yahoo-finance15.p.rapidapi.com",
+  YAHOO_RAPIDAPI_KEY: "",   // paste your RapidAPI key here
+  YAHOO_HOST: "apidojo-yahoo-finance-v1.p.rapidapi.com",
 
   // Alpha Vantage (free tier: 25 req/day)
   // Get key at: alphavantage.co/support/#api-key
@@ -765,43 +774,10 @@ const setCacheEntry = (key, value) => {
 // ─── YAHOO FINANCE FETCHER ────────────────────────────────────────
 const fetchYahooQuotes = async (symbols) => {
   if (!MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) return null;
-  const prices = {};
   try {
-    // yahoo-finance15 endpoint - fetch a batch via markets/quote
-    // Works one ticker at a time for this host
-    const keyTickers = symbols.slice(0, 10); // limit to 10 per call
-    for (const sym of keyTickers) {
-      try {
-        const type = sym.includes("=X") ? "CURRENCY" : sym.startsWith("^") ? "INDEX" : "STOCKS";
-        const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/api/v1/markets/quote?ticker="+encodeURIComponent(sym)+"&type="+type;
-        const res = await fetch(url, {
-          headers: {
-            "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
-            "x-rapidapi-host": MARKET_CONFIG.YAHOO_HOST,
-          }
-        });
-        if (!res.ok) continue;
-        const data = await res.json();
-        const body = data.body;
-        if (!body || body.length === 0) continue;
-        const q = body[0];
-        prices[sym] = {
-          price: parseFloat(q.regularMarketPrice || q.lastSalePrice || q.ask || 0),
-          change: parseFloat(q.regularMarketChange || q.change || 0),
-          changePct: parseFloat(q.regularMarketChangePercent || q.percentChange || 0),
-          name: q.shortName || q.longName || q.companyName || sym,
-          currency: q.currency || "USD",
-        };
-      } catch(e) { continue; }
-    }
-    return Object.keys(prices).length > 0 ? prices : null;
-  } catch(e) { return null; }
-};
-
-const fetchYahooNews = async () => {
-  if (!MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) return null;
-  try {
-    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/api/v1/markets/news?tickers=VTI%2CGSPX.L%2CEMIM.L%2CGBPUSD%3DX&type=ALL";
+    // apidojo Yahoo Finance v1 - batch quotes endpoint
+    const joined = symbols.slice(0, 20).join(",");
+    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/market/v2/get-quotes?region=US&lang=en&symbols="+encodeURIComponent(joined);
     const res = await fetch(url, {
       headers: {
         "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
@@ -810,14 +786,53 @@ const fetchYahooNews = async () => {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const items = (data.body) || [];
+    const quotes = (data.quoteResponse && data.quoteResponse.result) || [];
+    const prices = {};
+    quotes.forEach(q => {
+      prices[q.symbol] = {
+        price: q.regularMarketPrice,
+        change: q.regularMarketChange,
+        changePct: q.regularMarketChangePercent,
+        name: q.shortName || q.longName || q.symbol,
+        currency: q.currency || "USD",
+      };
+    });
+    return Object.keys(prices).length > 0 ? prices : null;
+  } catch(e) { return null; }
+};
+
+const fetchYahooNews = async () => {
+  if (!MARKET_CONFIG.YAHOO_RAPIDAPI_KEY) return null;
+  try {
+    // apidojo get-summaries endpoint for market news
+    const url = "https://"+MARKET_CONFIG.YAHOO_HOST+"/market/get-summary?region=US&lang=en";
+    const res = await fetch(url, {
+      headers: {
+        "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
+        "x-rapidapi-host": MARKET_CONFIG.YAHOO_HOST,
+      }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Try news from marketSummaryAndSparkResponse or fall back to get-trending news
+    const newsUrl = "https://"+MARKET_CONFIG.YAHOO_HOST+"/news/list?region=US&snippetCount=10";
+    const newsRes = await fetch(newsUrl, {
+      headers: {
+        "x-rapidapi-key": MARKET_CONFIG.YAHOO_RAPIDAPI_KEY,
+        "x-rapidapi-host": MARKET_CONFIG.YAHOO_HOST,
+      }
+    });
+    if (!newsRes.ok) return null;
+    const newsData = await newsRes.json();
+    const items = (newsData.items && newsData.items.result) || [];
     return items.slice(0,10).map((item,i) => ({
       id: i+1,
-      time: item.pubDate ? new Date(item.pubDate*1000).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) : "—",
-      category: (item.tickers && item.tickers[0]) || "Markets",
-      headline: item.title || item.summary,
-      source: item.source || "Yahoo Finance",
+      time: item.published_at ? new Date(item.published_at*1000).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) : "—",
+      category: (item.main_category) || "Markets",
+      headline: item.title,
+      source: item.publisher && item.publisher.name || "Yahoo Finance",
       tag: "LIVE",
+      url: item.link,
     })).filter(n => n.headline);
   } catch(e) { return null; }
 };
@@ -3148,6 +3163,290 @@ const UserManagement = ({ user }) => {
 };
 
 
+// ─── TRUSTEE DASHBOARD ────────────────────────────────────────────────────────
+const TrusteePage = () => {
+  const isMobile = useIsMobile();
+  const [quarter, setQuarter] = useState("Q2 2026");
+  const [editMode, setEditMode] = useState(false);
+
+  // All metrics are editable so the trustee can update them each quarter
+  const [metrics, setMetrics] = useState({
+    // Membership
+    activeMembers:   4128,
+    deferredMembers: 8762,
+    pensioners:      5331,
+    // Funding
+    fundingRatio:    98.4,
+    buyoutFunding:   85.1,
+    schemeAssets:    842,
+    monthlyCashflow: 1.2,
+    // Admin SLAs
+    retirementsSLA:  97.2,
+    transfersSLA:    94.6,
+    deathsSLA:       99.1,
+    queriesSLA:      96.4,
+    openCases:       327,
+    cases30:         41,
+    cases90:         6,
+    // Data integrity
+    commonData:      98.7,
+    conditionalData: 94.3,
+    missingAddress:  74,
+    missingNI:       18,
+    duplicates:      4,
+    // Risk & governance
+    auditActions:    3,
+    regBreaches:     0,
+    cyberIncidents:  0,
+    criticalRisks:   1,
+    // Overall score
+    healthScore:     91,
+  });
+
+  const [draft, setDraft] = useState({...metrics});
+
+  const rag = (val, green, amber) => {
+    if (val >= green) return { colour: C.green, icon: "🟢" };
+    if (val >= amber) return { colour: C.amber, icon: "🟠" };
+    return { colour: C.red, icon: "🔴" };
+  };
+  const ragLow = (val, redAbove, amberAbove) => {
+    if (val === 0) return { colour: C.green, icon: "🟢" };
+    if (val <= amberAbove) return { colour: C.amber, icon: "🟠" };
+    return { colour: C.red, icon: "🔴" };
+  };
+
+  const totalMembers = metrics.activeMembers + metrics.deferredMembers + metrics.pensioners;
+  const healthRag = rag(metrics.healthScore, 90, 75);
+
+  const saveEdits = () => { setMetrics({...draft}); setEditMode(false); };
+  const cancelEdits = () => { setDraft({...metrics}); setEditMode(false); };
+
+  const Num = ({ field, prefix="", suffix="", dp=0 }) => editMode ? (
+    <input
+      type="number"
+      value={draft[field]}
+      onChange={e => setDraft({...draft, [field]: parseFloat(e.target.value)||0})}
+      style={{width:80,padding:"2px 6px",border:"1.5px solid "+C.teal,borderRadius:4,fontSize:14,fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,color:C.navy,textAlign:"right"}}
+    />
+  ) : (
+    <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:22,fontWeight:700,color:C.navy,letterSpacing:-0.5}}>
+      {prefix}{typeof metrics[field]==="number"&&dp===0?metrics[field].toLocaleString():metrics[field].toFixed(dp)}{suffix}
+    </span>
+  );
+
+  const SectionHeader = ({ title }) => (
+    <div style={{display:"flex",alignItems:"center",gap:12,margin:"20px 0 14px",paddingTop:20,borderTop:"1px solid "+C.silver}}>
+      <div style={{height:2,width:20,background:C.teal,borderRadius:1,flexShrink:0}}/>
+      <div style={{fontSize:10,fontWeight:700,letterSpacing:3,color:C.faint,textTransform:"uppercase"}}>{title}</div>
+      <div style={{flex:1,height:1,background:C.silver}}/>
+    </div>
+  );
+
+  const KPI = ({ label, field, prefix="", suffix="", greenAt, amberAt, ragType="high", dp=0, wide=false }) => {
+    const val = editMode ? draft[field] : metrics[field];
+    const r = ragType==="high" ? rag(val, greenAt, amberAt) : ragLow(val, amberAt, greenAt);
+    return (
+      <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px",minWidth:wide?200:0}}>
+        <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>{label}</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <Num field={field} prefix={prefix} suffix={suffix} dp={dp}/>
+          <span style={{fontSize:20}}>{r.icon}</span>
+        </div>
+        <div style={{marginTop:6,height:3,background:C.silver,borderRadius:2}}>
+          <div style={{height:"100%",width:Math.min(val,100)+"%",background:r.colour,borderRadius:2,transition:"width 0.5s"}}/>
+        </div>
+      </div>
+    );
+  };
+
+  const StatItem = ({ label, field, prefix="", suffix="", ragType, greenAt, amberAt, dp=0 }) => {
+    const val = editMode ? draft[field] : metrics[field];
+    const r = ragType==="high" ? rag(val, greenAt||100, amberAt||95)
+            : ragType==="low"  ? ragLow(val, amberAt||1, greenAt||5)
+            : null;
+    return (
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"0.5px solid "+C.silver}}>
+        <span style={{fontSize:13,color:C.text}}>{label}</span>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {editMode ? (
+            <input type="number" value={draft[field]}
+              onChange={e=>setDraft({...draft,[field]:parseFloat(e.target.value)||0})}
+              style={{width:72,padding:"2px 6px",border:"1.5px solid "+C.teal,borderRadius:4,fontSize:13,fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,color:C.navy,textAlign:"right"}}/>
+          ) : (
+            <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:C.navy}}>
+              {prefix}{dp>0?val.toFixed(dp):typeof val==="number"?val.toLocaleString():val}{suffix}
+            </span>
+          )}
+          {r&&<span style={{fontSize:16}}>{r.icon}</span>}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{padding:isMobile?"12px 10px":24,maxWidth:1100,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{background:C.navy,borderRadius:12,padding:isMobile?"18px 16px":"22px 28px",marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:14}}>
+        <div>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:3,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",marginBottom:6}}>Pension scheme executive dashboard</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?22:28,fontWeight:700,color:C.white,letterSpacing:-0.5}}>
+            Trustee reporting
+          </div>
+          <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            {editMode ? (
+              <input value={draft.quarter||quarter} onChange={e=>setQuarter(e.target.value)}
+                style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,padding:"4px 10px",color:C.white,fontSize:13,fontFamily:"'Inter',sans-serif"}}/>
+            ) : (
+              <span style={{background:"rgba(0,184,176,0.2)",color:C.teal,fontSize:13,fontWeight:600,padding:"4px 12px",borderRadius:20}}>{quarter}</span>
+            )}
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{fontSize:36}}>{healthRag.icon}</div>
+              <div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:28,fontWeight:700,color:C.white,lineHeight:1}}>
+                  {editMode?(
+                    <input type="number" value={draft.healthScore}
+                      onChange={e=>setDraft({...draft,healthScore:parseFloat(e.target.value)||0})}
+                      style={{width:60,background:"transparent",border:"none",borderBottom:"1px solid "+C.teal,color:C.white,fontSize:28,fontFamily:"'Space Grotesk',sans-serif",fontWeight:700}}/>
+                  ):metrics.healthScore} / 100
+                </div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>Overall health score</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+          {editMode ? (
+            <>
+              <Btn small variant="ghost" onClick={cancelEdits}>Cancel</Btn>
+              <Btn small onClick={saveEdits}>Save changes</Btn>
+            </>
+          ) : (
+            <Btn small variant="ghost" onClick={()=>{setDraft({...metrics});setEditMode(true);}}>✏ Edit metrics</Btn>
+          )}
+        </div>
+      </div>
+
+      {/* MEMBERSHIP & FUNDING */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16,marginBottom:4}}>
+        {/* Membership */}
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:12,padding:"18px 20px"}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.teal,marginBottom:14}}>Membership</div>
+          <StatItem label="Active members"   field="activeMembers"/>
+          <StatItem label="Deferred members" field="deferredMembers"/>
+          <StatItem label="Pensioners"       field="pensioners"/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",marginTop:4}}>
+            <span style={{fontSize:13,fontWeight:600,color:C.navy}}>Total members</span>
+            <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:18,fontWeight:700,color:C.navy}}>{totalMembers.toLocaleString()}</span>
+          </div>
+        </div>
+        {/* Funding */}
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:12,padding:"18px 20px"}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.teal,marginBottom:14}}>Funding</div>
+          <StatItem label="Funding ratio"    field="fundingRatio"   suffix="%"  ragType="high" greenAt={95}  amberAt={85} dp={1}/>
+          <StatItem label="Buyout funding"   field="buyoutFunding"  suffix="%"  ragType="high" greenAt={90}  amberAt={80} dp={1}/>
+          <StatItem label="Scheme assets"    field="schemeAssets"   prefix="£"  suffix="m"     dp={0}/>
+          <StatItem label="Monthly cashflow" field="monthlyCashflow" prefix={metrics.monthlyCashflow>=0?"+£":"£"} suffix="m" dp={1}/>
+        </div>
+      </div>
+
+      <SectionHeader title="Administration performance"/>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:16}}>
+        <KPI label="Retirements SLA" field="retirementsSLA" suffix="%" greenAt={96} amberAt={90} dp={1}/>
+        <KPI label="Transfers SLA"   field="transfersSLA"  suffix="%" greenAt={96} amberAt={90} dp={1}/>
+        <KPI label="Deaths SLA"      field="deathsSLA"     suffix="%" greenAt={96} amberAt={90} dp={1}/>
+        <KPI label="Member queries SLA" field="queriesSLA" suffix="%" greenAt={96} amberAt={90} dp={1}/>
+      </div>
+      <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 18px",marginBottom:4}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Open cases</div>
+        <StatItem label="Open cases total"  field="openCases"/>
+        <StatItem label="Cases > 30 days"   field="cases30"  ragType="low" greenAt={5}  amberAt={20}/>
+        <StatItem label="Cases > 90 days"   field="cases90"  ragType="low" greenAt={0}  amberAt={3}/>
+      </div>
+
+      <SectionHeader title="Data integrity"/>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(2,1fr)",gap:10,marginBottom:10}}>
+        <KPI label="Common data score"      field="commonData"      suffix="%" greenAt={97} amberAt={92} dp={1}/>
+        <KPI label="Conditional data score" field="conditionalData" suffix="%" greenAt={96} amberAt={90} dp={1}/>
+      </div>
+      <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 18px",marginBottom:4}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Data issues</div>
+        <StatItem label="Missing addresses"  field="missingAddress" ragType="low" greenAt={0} amberAt={50}/>
+        <StatItem label="Missing NI numbers" field="missingNI"      ragType="low" greenAt={0} amberAt={20}/>
+        <StatItem label="Duplicate records"  field="duplicates"     ragType="low" greenAt={0} amberAt={2}/>
+      </div>
+
+      <SectionHeader title="Risk & governance"/>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Open audit actions</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <Num field="auditActions"/>
+            <span style={{fontSize:20}}>{ragLow(metrics.auditActions,5,2).icon}</span>
+          </div>
+        </div>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Regulatory breaches</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <Num field="regBreaches"/>
+            <span style={{fontSize:20}}>{ragLow(metrics.regBreaches,1,0).icon}</span>
+          </div>
+        </div>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Cyber incidents</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <Num field="cyberIncidents"/>
+            <span style={{fontSize:20}}>{ragLow(metrics.cyberIncidents,1,0).icon}</span>
+          </div>
+        </div>
+        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Critical risks</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <Num field="criticalRisks"/>
+            <span style={{fontSize:20}}>{ragLow(metrics.criticalRisks,1,0).icon}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Overall health score bar */}
+      <div style={{background:C.navy,borderRadius:12,padding:"20px 24px"}}>
+        <div style={{fontSize:11,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginBottom:12}}>Overall trustee health score</div>
+        <div style={{display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?36:48,fontWeight:700,color:C.white,letterSpacing:-1,lineHeight:1}}>
+            {editMode?(
+              <input type="number" value={draft.healthScore}
+                onChange={e=>setDraft({...draft,healthScore:parseFloat(e.target.value)||0})}
+                style={{width:100,background:"transparent",border:"none",borderBottom:"2px solid "+C.teal,color:C.white,fontSize:isMobile?36:48,fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,outline:"none"}}/>
+            ):metrics.healthScore}
+            <span style={{fontSize:isMobile?18:24,color:"rgba(255,255,255,0.4)",marginLeft:4}}>/100</span>
+          </div>
+          <div style={{flex:1,minWidth:200}}>
+            <div style={{height:12,background:"rgba(255,255,255,0.1)",borderRadius:6,overflow:"hidden",marginBottom:8}}>
+              <div style={{height:"100%",width:metrics.healthScore+"%",background:healthRag.colour,borderRadius:6,transition:"width 0.8s ease"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"rgba(255,255,255,0.3)"}}>
+              <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+            </div>
+          </div>
+          <div style={{fontSize:36}}>{healthRag.icon}</div>
+          <div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:16,fontWeight:600,color:healthRag.colour}}>
+              {metrics.healthScore>=90?"Excellent":metrics.healthScore>=75?"Good":metrics.healthScore>=60?"Fair":"Needs attention"}
+            </div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:2}}>{quarter} assessment</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{marginTop:16,fontSize:11,color:C.faint,textAlign:"center",lineHeight:1.8}}>
+        Trustee dashboard · {quarter} · Click <strong>✏ Edit metrics</strong> to update figures each quarter<br/>
+        All RAG statuses are automatically calculated from the values entered
+      </div>
+    </div>
+  );
+};
+
+
 export default function App(){
   const {user,loading,error,login,logout} = useAuth();
   const [section,setSection]=useState("dashboard");
@@ -3207,6 +3506,7 @@ export default function App(){
         {section==="news"&&<News/>}
         {section==="connect"&&<Connect/>}
         {section==="users"&&<UserManagement user={user}/>}
+        {section==="trustee"&&<TrusteePage/>}
       </div>
     </div>
   );
