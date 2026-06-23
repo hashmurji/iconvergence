@@ -506,15 +506,15 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
   const isMobile=useIsMobile();
   const [menuOpen,setMenuOpen]=useState(false);
   const items=[
-    {key:"dashboard",label:"Dashboard",icon:"⊞"},
-    {key:"clients",label:"Clients",icon:"👤"},
-    {key:"alerts",label:"Alerts",icon:"🔔"},
-    {key:"pricing",label:"Pricing",icon:"📈"},
+    {key:"dashboard",label:"Dashboard",icon:"◈"},
+    {key:"clients",label:"Clients",icon:"◉"},
+    {key:"alerts",label:"Alerts",icon:"◎"},
+    {key:"pricing",label:"Pricing",icon:"◈"},
     {key:"ai",label:"AI Insights",icon:"✦"},
-    {key:"news",label:"News",icon:"📰"},
-    {key:"connect",label:"Connect",icon:"⚡"},
-    {key:"trustee",label:"Trustee",icon:"🔐"},
-    {key:"users",label:"Users",icon:"👥"},
+    {key:"news",label:"News",icon:"◇"},
+    {key:"connect",label:"Connect",icon:"◆"},
+    {key:"trustee",label:"Trustee",icon:"◉"},
+    {key:"users",label:"Users",icon:"◎"},
   ];
   const handleNav=(key)=>{setSection(key);setMenuOpen(false);};
   return(
@@ -1392,7 +1392,7 @@ const ClientDetail=({clientId,onBack,selectedCcy,setPreviewClientId})=>{
                 {comp&&comp.flags&&comp.flags.length===0&&<div style={{color:C.green,fontSize:13,fontWeight:500}}>OK No breaches detected</div>}
                 {comp&&comp.flags&&comp.flags.length>0&&comp.flags.map((f,fi)=>(
                   <div key={fi} style={{display:"flex",gap:8,marginBottom:6,padding:"7px 10px",background:f.type==="error"?C.redBg:C.amberBg,borderRadius:6}}>
-                    <span>{f.type==="error"?"[R]":"[A]"}</span>
+                    <span>{f.type==="error"?"●":"●"}</span>
                     <span style={{fontSize:12,color:C.text,lineHeight:1.5}}>{f.msg}</span>
                   </div>
                 ))}
@@ -2062,14 +2062,14 @@ const Connect=()=>{
   const [connected,setConnected]=useState(["bloomberg"]);
   const [showModal,setShowModal]=useState(null);
   const apps=[
-    {id:"bloomberg",name:"Bloomberg",category:"Market Data",desc:"Real-time prices, news, analytics & FX rates. Currently providing live data to i-Convergence.",icon:"o"},
-    {id:"refinitiv",name:"Refinitiv Eikon",category:"Market Data",desc:"Financial data, news, and analytics platform.",icon:"o"},
-    {id:"plaid",name:"Plaid",category:"Banking",desc:"Connect 12,000+ financial institutions for live account & transaction feeds.",icon:"o"},
-    {id:"monzo",name:"Monzo Business",category:"Banking",desc:"UK business banking with real-time transaction feeds.",icon:"[R]"},
-    {id:"barclays",name:"Barclays Open Banking",category:"Banking",desc:"PSD2 Open Banking API for account data.",icon:"o"},
-    {id:"hsbc",name:"HSBC Open Banking",category:"Banking",desc:"HSBC account and transaction data.",icon:"o"},
-    {id:"factset",name:"FactSet",category:"Analytics",desc:"Institutional-grade financial data and portfolio analytics.",icon:"o"},
-    {id:"morningstar",name:"Morningstar Direct",category:"Analytics",desc:"Investment research, ratings, and portfolio analysis.",icon:"*"},
+    {id:"bloomberg",name:"Bloomberg",category:"Market Data",desc:"Real-time prices, news, analytics & FX rates. Currently providing live data to i-Convergence.",icon:"B"},
+    {id:"refinitiv",name:"Refinitiv Eikon",category:"Market Data",desc:"Financial data, news, and analytics platform.",icon:"R"},
+    {id:"plaid",name:"Plaid",category:"Banking",desc:"Connect 12,000+ financial institutions for live account & transaction feeds.",icon:"P"},
+    {id:"monzo",name:"Monzo Business",category:"Banking",desc:"UK business banking with real-time transaction feeds.",icon:"●"},
+    {id:"barclays",name:"Barclays Open Banking",category:"Banking",desc:"PSD2 Open Banking API for account data.",icon:"B"},
+    {id:"hsbc",name:"HSBC Open Banking",category:"Banking",desc:"HSBC account and transaction data.",icon:"H"},
+    {id:"factset",name:"FactSet",category:"Analytics",desc:"Institutional-grade financial data and portfolio analytics.",icon:"F"},
+    {id:"morningstar",name:"Morningstar Direct",category:"Analytics",desc:"Investment research, ratings, and portfolio analysis.",icon:"M"},
     {id:"salesforce",name:"Salesforce FSC",category:"CRM",desc:"Sync client data, activities and opportunities with Salesforce Financial Services Cloud.",icon:"C"},
     {id:"docusign",name:"DocuSign",category:"Documents",desc:"Electronic signatures and document workflow automation.",icon:"D"},
     {id:"xero",name:"Xero",category:"Accounting",desc:"Accounting and invoicing integration for fee management.",icon:"H"},
@@ -2093,7 +2093,7 @@ const Connect=()=>{
                 <div key={app.id} style={{background:C.white,border:"0.5px solid "+(isConn?C.teal:C.silver),borderRadius:10,padding:16}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:9}}>
                     <div style={{display:"flex",gap:9,alignItems:"center"}}>
-                      <span style={{fontSize:20}}>{app.icon}</span>
+                      <div style={{width:32,height:32,borderRadius:8,background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:13,fontWeight:700,flexShrink:0}}>{app.icon}</div>
                       <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:13,fontWeight:600,color:C.navy}}>{app.name}</div>
                     </div>
                     {isConn&&<Badge color="success">Live</Badge>}
@@ -2107,7 +2107,7 @@ const Connect=()=>{
         </div>
       ))}
       {showModal&&<Modal title={"Connect "+showModal.name} onClose={()=>setShowModal(null)}>
-        <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:18}}><span style={{fontSize:34}}>{showModal.icon}</span><div><div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:16,fontWeight:600,color:C.navy}}>{showModal.name}</div><div style={{fontSize:12,color:C.faint}}>{showModal.category}</div></div></div>
+        <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:18}}><div style={{width:44,height:44,borderRadius:10,background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:18,fontWeight:700}}>{showModal.icon}</div><div><div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:16,fontWeight:600,color:C.navy}}>{showModal.name}</div><div style={{fontSize:12,color:C.faint}}>{showModal.category}</div></div></div>
         <div style={{background:C.silver,borderRadius:8,padding:14,marginBottom:16,fontSize:13,color:C.text,lineHeight:1.6}}>{showModal.desc}</div>
         <FldInput label="API Key / Client ID" value="" onChange={()=>{}} placeholder="Enter credentials..."/>
         <FldInput label="Secret / Token" value="" onChange={()=>{}} placeholder="**********" type="password"/>
@@ -2343,7 +2343,7 @@ const RiskPage = ({ selectedCcy, setSection, setSelectedClient }) => {
                 )}
                 {comp && comp.flags && comp.flags.length > 0 && comp.flags.map((f, fi) => (
                   <div key={fi} style={{ display: "flex", gap: 8, marginBottom: 8, padding: "8px 10px", background: f.type === "error" ? C.redBg : C.amberBg, borderRadius: 6 }}>
-                    <span style={{ flexShrink: 0 }}>{f.type === "error" ? "[R]" : "[A]"}</span>
+                    <span style={{ flexShrink: 0 }}>{f.type === "error" ? "●" : "●"}</span>
                     <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{f.msg}</span>
                   </div>
                 ))}
@@ -2555,7 +2555,7 @@ const AlertsPage = ({ setSection, setSelectedClient }) => {
         ) : filtered.map(alert => (
           <div key={alert.id} style={{ background: C.white, border: "0.5px solid " + (alert.severity === "error" ? "#FCA5A5" : alert.severity === "warning" ? "#FCD34D" : C.silver), borderRadius: 10, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, opacity: alert.status === "dismissed" ? 0.5 : 1 }}>
             <div style={{ display: "flex", gap: 12, flex: 1 }}>
-              <div style={{ fontSize: 20, flexShrink: 0 }}>{alert.severity === "error" ? "[R]" : alert.severity === "warning" ? "[A]" : "o"}</div>
+              <div style={{ fontSize: 20, flexShrink: 0 }}>{alert.severity === "error" ? "●" : alert.severity === "warning" ? "●" : "o"}</div>
               <div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
                   <Badge color={alert.severity === "error" ? "error" : alert.severity === "warning" ? "warning" : "info"}>{alert.type}</Badge>
@@ -3221,14 +3221,14 @@ const TrusteePage = () => {
   const [draft, setDraft] = useState({...metrics});
 
   const rag = (val, green, amber) => {
-    if (val >= green) return { colour: C.green, icon: "[G]" };
+    if (val >= green) return { colour: C.green, icon: "✓" };
     if (val >= amber) return { colour: C.amber, icon: "o" };
-    return { colour: C.red, icon: "[R]" };
+    return { colour: C.red, icon: "●" };
   };
   const ragLow = (val, redAbove, amberAbove) => {
-    if (val === 0) return { colour: C.green, icon: "[G]" };
+    if (val === 0) return { colour: C.green, icon: "✓" };
     if (val <= amberAbove) return { colour: C.amber, icon: "o" };
-    return { colour: C.red, icon: "[R]" };
+    return { colour: C.red, icon: "●" };
   };
 
   const totalMembers = metrics.activeMembers + metrics.deferredMembers + metrics.pensioners;
