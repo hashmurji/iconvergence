@@ -508,12 +508,10 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
   const items=[
     {key:"dashboard",label:"Dashboard",icon:"◈"},
     {key:"clients",label:"Clients",icon:"◉"},
-    {key:"alerts",label:"Alerts",icon:"◎"},
     {key:"pricing",label:"Pricing",icon:"◈"},
-    {key:"ai",label:"AI Insights",icon:"✦"},
-    {key:"news",label:"News",icon:"◇"},
+    {key:"risk",label:"Risk",icon:"◎"},
+    {key:"withdrawals",label:"Withdrawals",icon:"◇"},
     {key:"connect",label:"Connect",icon:"◆"},
-    {key:"trustee",label:"Trustee",icon:"◉"},
     {key:"users",label:"Users",icon:"◎"},
   ];
   const handleNav=(key)=>{setSection(key);setMenuOpen(false);};
@@ -524,8 +522,7 @@ const Nav=({section,setSection,selectedCcy,setCcy,user,logout})=>{
           <Logo size={isMobile?19:24}/>
         </div>
         {!isMobile&&items.filter(i=>{
-          if(i.key==="trustee") return user && (user.roles||[]).includes("trustee");
-          if(i.key==="users")   return user && user.isAdviser;
+          if(i.key==="users") return user && user.isAdviser;
           return true;
         }).map(i=>(
           <button key={i.key} onClick={()=>handleNav(i.key)} style={{background:"none",border:"none",color:section===i.key?C.teal:"rgba(255,255,255,0.5)",fontSize:12,fontWeight:section===i.key?600:400,cursor:"pointer",padding:"0 9px",height:"100%",borderBottom:section===i.key?"2px solid "+C.teal:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap",fontFamily:"'Inter',sans-serif"}}>
@@ -625,10 +622,10 @@ const Dashboard=({setSection,setSelectedClient,selectedCcy})=>{
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <StatCard label="Active clients" value="4" dark/>
+          <StatCard label="Active clients" value={CLIENTS.length.toString()} dark/>
           <StatCard label="Total transactions" value={totalTxns.toLocaleString()} dark/>
           <StatCard label="Avg. return" value={pct(calcPct(totalCost,totalAUM))} sub="across all clients" trend={totalPL>=0?"up":"down"} dark/>
-          <StatCard label="Compliance" value="100%" sub="4 of 4 verified" trend="up" dark/>
+          <StatCard label="Compliance" value={Math.round(CLIENTS.filter(c=>c.verified).length/CLIENTS.length*100)+"%"} sub={CLIENTS.filter(c=>c.verified).length+" of "+CLIENTS.length+" verified"} trend="up" dark/>
         </div>
       </div>
 
@@ -1126,6 +1123,175 @@ const buildDefaultAlerts = () => [
 ];
 
 // --- CLIENT DETAIL -------------------------------------------------
+
+// --- DISTRIBUTION DATA (sample - will come from OneDrive/Excel) --------
+const DISTRIBUTIONS = {
+  "C00355633": [
+    { id: "D1", name: "Distribution 1", date: "2023-06-15", totalAmount: 25000, ccy: "USD",
+      payments: [
+        { date: "2023-06-15", amount: 12500, reference: "D1-A", status: "Paid", method: "Bank Transfer" },
+        { date: "2023-09-15", amount: 12500, reference: "D1-B", status: "Paid", method: "Bank Transfer" },
+      ]
+    },
+    { id: "D2", name: "Distribution 2", date: "2024-01-10", totalAmount: 30000, ccy: "USD",
+      payments: [
+        { date: "2024-01-10", amount: 15000, reference: "D2-A", status: "Paid", method: "Bank Transfer" },
+        { date: "2024-04-10", amount: 15000, reference: "D2-B", status: "Pending", method: "Bank Transfer" },
+      ]
+    },
+  ],
+  "C00356735": [
+    { id: "D1", name: "Distribution 1", date: "2023-03-01", totalAmount: 50000, ccy: "GBP",
+      payments: [
+        { date: "2023-03-01", amount: 25000, reference: "D1-A", status: "Paid", method: "Bank Transfer" },
+        { date: "2023-09-01", amount: 25000, reference: "D1-B", status: "Paid", method: "Bank Transfer" },
+      ]
+    },
+  ],
+  "C00355634": [
+    { id: "D1", name: "Distribution 1", date: "2023-08-20", totalAmount: 40000, ccy: "USD",
+      payments: [
+        { date: "2023-08-20", amount: 20000, reference: "D1-A", status: "Paid", method: "Bank Transfer" },
+        { date: "2024-02-20", amount: 20000, reference: "D1-B", status: "Paid", method: "Bank Transfer" },
+      ]
+    },
+    { id: "D2", name: "Distribution 2", date: "2024-03-15", totalAmount: 45000, ccy: "USD",
+      payments: [
+        { date: "2024-03-15", amount: 22500, reference: "D2-A", status: "Paid", method: "Bank Transfer" },
+        { date: "2024-09-15", amount: 22500, reference: "D2-B", status: "Scheduled", method: "Bank Transfer" },
+      ]
+    },
+  ],
+  "C00347223": [
+    { id: "D1", name: "Distribution 1", date: "2022-12-01", totalAmount: 100000, ccy: "GBP",
+      payments: [
+        { date: "2022-12-01", amount: 50000, reference: "D1-A", status: "Paid", method: "Bank Transfer" },
+        { date: "2023-06-01", amount: 50000, reference: "D1-B", status: "Paid", method: "Bank Transfer" },
+      ]
+    },
+    { id: "D2", name: "Distribution 2", date: "2023-12-01", totalAmount: 120000, ccy: "GBP",
+      payments: [
+        { date: "2023-12-01", amount: 60000, reference: "D2-A", status: "Paid", method: "Bank Transfer" },
+        { date: "2024-06-01", amount: 60000, reference: "D2-B", status: "Pending", method: "Bank Transfer" },
+      ]
+    },
+    { id: "D3", name: "Distribution 3", date: "2024-06-01", totalAmount: 80000, ccy: "GBP",
+      payments: [
+        { date: "2024-06-01", amount: 40000, reference: "D3-A", status: "Scheduled", method: "Bank Transfer" },
+        { date: "2024-12-01", amount: 40000, reference: "D3-B", status: "Scheduled", method: "Bank Transfer" },
+      ]
+    },
+  ],
+};
+
+const statusColour = (s) => {
+  if (s === "Paid") return C.green;
+  if (s === "Pending") return C.amber;
+  if (s === "Scheduled") return C.faint;
+  return C.navy;
+};
+const statusBg = (s) => {
+  if (s === "Paid") return C.greenBg;
+  if (s === "Pending") return C.amberBg;
+  if (s === "Scheduled") return C.silver;
+  return C.silver;
+};
+
+const DistributionTab = ({ clientId, selectedCcy, sym }) => {
+  const [selectedDist, setSelectedDist] = useState(null);
+  const distributions = DISTRIBUTIONS[clientId] || [];
+
+  if (distributions.length === 0) {
+    return (
+      <div style={{padding:32,textAlign:"center",color:C.faint}}>
+        <div style={{fontSize:32,marginBottom:12}}>◇</div>
+        <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:6}}>No distributions</div>
+        <div style={{fontSize:12}}>No distribution payments have been recorded for this client.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+        {distributions.map(d => (
+          <button key={d.id} onClick={() => setSelectedDist(selectedDist === d.id ? null : d.id)}
+            style={{background:selectedDist===d.id?C.navy:C.white,color:selectedDist===d.id?C.white:C.navy,border:"1.5px solid "+(selectedDist===d.id?C.navy:C.silver),borderRadius:10,padding:"12px 20px",cursor:"pointer",fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:13,textAlign:"left",minWidth:160}}>
+            <div style={{fontSize:11,fontWeight:600,color:selectedDist===d.id?"rgba(255,255,255,0.6)":C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>{d.name}</div>
+            <div style={{fontSize:18,fontWeight:700,letterSpacing:-0.3}}>{CCY_SYMBOLS[d.ccy]||d.ccy}{fmt(d.totalAmount,0)}</div>
+            <div style={{fontSize:11,color:selectedDist===d.id?"rgba(255,255,255,0.5)":C.faint,marginTop:3}}>{d.date}</div>
+          </button>
+        ))}
+      </div>
+
+      {selectedDist && (() => {
+        const dist = distributions.find(d => d.id === selectedDist);
+        if (!dist) return null;
+        const totalPaid = dist.payments.filter(p => p.status === "Paid").reduce((s,p) => s+p.amount, 0);
+        const totalPending = dist.payments.filter(p => p.status !== "Paid").reduce((s,p) => s+p.amount, 0);
+        return (
+          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:12,padding:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,flexWrap:"wrap",gap:12}}>
+              <div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:16,fontWeight:700,color:C.navy,marginBottom:4}}>{dist.name}</div>
+                <div style={{fontSize:12,color:C.faint}}>Initiated {dist.date} · {dist.payments.length} payment{dist.payments.length!==1?"s":""}</div>
+              </div>
+              <div style={{display:"flex",gap:16}}>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase"}}>Total</div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:20,fontWeight:700,color:C.navy}}>{CCY_SYMBOLS[dist.ccy]||dist.ccy}{fmt(dist.totalAmount,0)}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase"}}>Paid</div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:20,fontWeight:700,color:C.green}}>{CCY_SYMBOLS[dist.ccy]||dist.ccy}{fmt(totalPaid,0)}</div>
+                </div>
+                {totalPending > 0 && <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase"}}>Remaining</div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:20,fontWeight:700,color:C.amber}}>{CCY_SYMBOLS[dist.ccy]||dist.ccy}{fmt(totalPending,0)}</div>
+                </div>}
+              </div>
+            </div>
+
+            <div style={{width:"100%",height:6,background:C.silver,borderRadius:3,marginBottom:20,overflow:"hidden"}}>
+              <div style={{width:(totalPaid/dist.totalAmount*100)+"%",height:"100%",background:C.green,borderRadius:3,transition:"width 0.4s"}}/>
+            </div>
+
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:"1.5px solid "+C.silver}}>
+                  {["Payment","Date","Reference","Amount","Method","Status"].map(h=>(
+                    <th key={h} style={{textAlign:"left",padding:"6px 10px",fontSize:10,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dist.payments.map((p,i) => (
+                  <tr key={i} style={{borderBottom:"0.5px solid "+C.silver}}>
+                    <td style={{padding:"10px 10px",fontWeight:600,color:C.navy}}>Payment {i+1}</td>
+                    <td style={{padding:"10px 10px",color:C.text}}>{p.date}</td>
+                    <td style={{padding:"10px 10px",color:C.faint,fontFamily:"monospace",fontSize:11}}>{p.reference}</td>
+                    <td style={{padding:"10px 10px",fontWeight:600,color:C.navy,fontFamily:"'Space Grotesk',sans-serif"}}>{CCY_SYMBOLS[dist.ccy]||dist.ccy}{fmt(p.amount,0)}</td>
+                    <td style={{padding:"10px 10px",color:C.text}}>{p.method}</td>
+                    <td style={{padding:"10px 10px"}}>
+                      <span style={{background:statusBg(p.status),color:statusColour(p.status),fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:100}}>{p.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+
+      {!selectedDist && (
+        <div style={{background:C.silver,borderRadius:8,padding:"14px 18px",fontSize:13,color:C.faint,textAlign:"center"}}>
+          Select a distribution above to view payment details
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ClientDetail=({clientId,onBack,selectedCcy,setPreviewClientId})=>{
   const isMobile=useIsMobile();
   const [tab,setTab]=useState("valuation");
@@ -1239,7 +1405,7 @@ const ClientDetail=({clientId,onBack,selectedCcy,setPreviewClientId})=>{
         </div>
       </div>
       <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.silver,marginBottom:18,overflowX:"auto"}}>
-        {[["valuation","Valuation"],["transactions","Transactions"],["risk","Risk & Rebalance"],["crm","CRM"]].map(([t,label])=>(
+        {[["valuation","Valuation"],["transactions","Transactions"],["distribution","Distribution"],["risk","Risk & Rebalance"],["crm","CRM"]].map(([t,label])=>(
           <button key={t} onClick={()=>setTab(t)} style={{background:"none",border:"none",borderBottom:tab===t?"2px solid "+C.teal:"2px solid transparent",color:tab===t?C.teal:C.faint,fontSize:13,fontWeight:tab===t?600:400,cursor:"pointer",padding:"9px 16px",marginBottom:-1,whiteSpace:"nowrap",fontFamily:"'Inter',sans-serif"}}>
             {label}
           </button>
@@ -1444,6 +1610,9 @@ const ClientDetail=({clientId,onBack,selectedCcy,setPreviewClientId})=>{
             </div>
           </div>
         </div>
+      )}
+      {tab==="distribution"&&(
+        <DistributionTab clientId={clientId} selectedCcy={selectedCcy} sym={sym}/>
       )}
       {tab==="crm"&&(
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 2fr",gap:14}}>
@@ -1867,197 +2036,6 @@ const Valuations=({setSection,setSelectedClient,selectedCcy})=>{
 };
 
 // --- NEWS (Bloomberg feed) -----------------------------------------
-const News=()=>{
-  const isMobile=useIsMobile();
-  const [ticker,setTicker]=useState("all");
-  const {livePrices,liveNews,marketStatus,lastUpdated,refresh}=useMarketData();
-  const [refreshing,setRefreshing]=useState(false);
-
-  const handleRefresh=async()=>{
-    setRefreshing(true);
-    await refresh();
-    setRefreshing(false);
-  };
-
-  const sourceLabel = marketStatus==="yahoo"?"Yahoo Finance . Live" : marketStatus==="alphavantage"?"Alpha Vantage . Live" : marketStatus==="bloomberg"?"Bloomberg . Live" : "Static data . No API key configured";
-  const sourceColor = marketStatus==="static"?C.amber:C.teal;
-
-  // Use live news if available, otherwise use static
-  const newsItems = (liveNews && liveNews.length>0) ? liveNews : BLOOMBERG_NEWS;
-  const allTickers=["all","FTSE","SPX","GBP","EMIM","GSPX","GILTS","XAU","NKY"];
-  const filtered=ticker==="all"?newsItems:newsItems.filter(n=>n.tag===ticker||n.category.includes(ticker));
-
-  // Build indices from live prices or static
-  const getIndexValue = (symbol, staticValue, staticPct) => {
-    if (livePrices && livePrices[symbol]) {
-      const d = livePrices[symbol];
-      return { value: d.price, pct: d.changePct, direction: d.changePct>= 0 ?"up":"down" };
-    }
-    return { value: staticValue, pct: staticPct, direction: staticPct>= 0 ?"up":"down" };
-  };
-
-  const indices = [
-    {...getIndexValue("^GSPC",5312.8,+0.35), name:"S&P 500",    ticker:"SPX"},
-    {...getIndexValue("^FTSE",8247.3,-0.15), name:"FTSE 100",   ticker:"UKX"},
-    {...getIndexValue("^STOXX50E",4921.6,+0.64), name:"Euro Stoxx", ticker:"SX5E"},
-    {...getIndexValue("^N225",38842.0,+1.09), name:"Nikkei 225", ticker:"NKY"},
-    {...getIndexValue("^HSI",18452.1,-0.48), name:"Hang Seng",   ticker:"HSI"},
-  ];
-
-  // Build risers/fallers from live prices for portfolio tickers
-  const portfolioTickers = ["ARKK","EMIM","VAPX","IAU","GSPX","DBEU","LGLV","CUKX","VYM","IJPH"];
-  const portfolioMoves = portfolioTickers.map(t=>{
-    const yahooSym = TICKER_MAP[t];
-    const live = livePrices && (livePrices[yahooSym]||livePrices[t]);
-    if (live && live.changePct !== undefined) {
-      return {ticker:t, name:(PRICES.find(p=>p.ticker===t)||{name:t}).name, pct:live.changePct, change:live.change};
-    }
-    return null;
-  }).filter(Boolean);
-
-  const risers = portfolioMoves.length>0 ? [...portfolioMoves].sort((a,b)=>b.pct-a.pct).slice(0,5)
-    : MARKET_DATA.risers;
-  const fallers = portfolioMoves.length>0 ? [...portfolioMoves].sort((a,b)=>a.pct-b.pct).slice(0,5)
-    : MARKET_DATA.fallers;
-
-  // FX rates from live or static
-  const getFX = (sym, staticRate) => {
-    if (livePrices && livePrices[sym]) return livePrices[sym].price;
-    return staticRate;
-  };
-  const fxRates = [
-    {pair:"GBP/USD", rate:getFX("GBPUSD=X",1.2618), change:+0.0042},
-    {pair:"GBP/EUR", rate:getFX("GBPEUR=X",1.1603), change:-0.0021},
-    {pair:"EUR/USD", rate:getFX("EURUSD=X",1.0875), change:+0.0031},
-    {pair:"USD/CNY", rate:getFX("USDCNY=X",7.2400), change:-0.0120},
-  ];
-
-  return(
-    <div style={{padding:isMobile?"12px 10px":24}}>
-      <div style={{marginBottom:isMobile?12:18}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3,flexWrap:"wrap"}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:sourceColor}}/>
-          <div style={{fontSize:10,fontWeight:600,letterSpacing:3,color:sourceColor,textTransform:"uppercase"}}>{sourceLabel}</div>
-          {lastUpdated&&<div style={{fontSize:10,color:C.faint}}>Updated {lastUpdated.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>}
-          <button onClick={handleRefresh} style={{background:"none",border:"1px solid "+C.silver,borderRadius:5,padding:"2px 8px",fontSize:11,cursor:"pointer",color:C.faint,fontFamily:"'Inter',sans-serif"}}>{refreshing?"Refreshing...":"Refresh Refresh"}</button>
-        </div>
-        <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:isMobile?18:22,fontWeight:600,color:C.navy}}>Market News and Intelligence</div>
-        {marketStatus==="static"&&(
-          <div style={{marginTop:8,background:C.amberBg,border:"1px solid "+C.gold,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.amber}}>
-            <strong>No live data source connected.</strong> Add a Yahoo Finance RapidAPI key or Alpha Vantage key in <code>MARKET_CONFIG</code> (top of App.jsx) to enable live prices and news.
-          </div>
-        )}
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:isMobile?10:16,marginBottom:16}}>
-        <div>
-          <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-            {allTickers.map(t=>(
-              <button key={t} onClick={()=>setTicker(t)} style={{background:ticker===t?C.navy:C.white,color:ticker===t?C.white:C.text,border:"0.5px solid "+(ticker===t?C.navy:C.silver),borderRadius:6,padding:"5px 12px",fontSize:11,fontWeight:ticker===t?600:400,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>
-                {t==="all"?"All":t}
-              </button>
-            ))}
-          </div>
-          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
-            <div style={{padding:"10px 16px",borderBottom:"0.5px solid "+C.silver,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FAFBFC"}}>
-              <div style={{fontSize:12,fontWeight:600,color:C.navy}}>Headlines</div>
-              <div style={{fontSize:11,color:C.faint}}>{filtered.length} articles</div>
-            </div>
-            {filtered.length=== 0 ?(
-              <div style={{padding:32,textAlign:"center",color:C.faint,fontSize:13}}>No articles for this filter.</div>
-            ):filtered.map((n,i)=>(
-              <div key={n.id||i} style={{padding:"14px 16px",borderBottom:"0.5px solid "+C.silver,display:"flex",gap:14,alignItems:"flex-start"}}>
-                <div style={{fontSize:11,color:C.faint,whiteSpace:"nowrap",minWidth:38}}>{n.time||"--"}</div>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",gap:7,marginBottom:5,flexWrap:"wrap"}}>
-                    <Badge color="navy">{n.category}</Badge>
-                    <Badge color={n.tag==="LIVE"?"success":"info"}>{n.tag}</Badge>
-                  </div>
-                  <div style={{fontSize:13,fontWeight:500,color:C.navy,lineHeight:1.5}}>{n.headline}</div>
-                  <div style={{fontSize:11,color:C.faint,marginTop:3}}>{n.source}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{marginTop:14}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Key market trends</div>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
-              {MARKET_DATA.trends.map((t,i)=>(
-                <div key={i} style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:16}}>
-                  <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:13,fontWeight:600,color:C.navy,marginBottom:7}}>{t.title}</div>
-                  <div style={{fontSize:12,color:C.text,lineHeight:1.7}}>{t.body}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden",marginBottom:12}}>
-            <div style={{padding:"10px 14px",borderBottom:"0.5px solid "+C.silver,background:C.navy}}>
-              <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",letterSpacing:1,textTransform:"uppercase"}}>Global indices</div>
-            </div>
-            {indices.map(i=>(
-              <div key={i.ticker} style={{padding:"11px 14px",borderBottom:"0.5px solid "+C.silver,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{i.name}</div>
-                  <div style={{fontSize:10,color:C.faint}}>{i.ticker}</div>
-                </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:13,fontWeight:600,color:C.navy}}>{i.value&&i.value.toLocaleString()}</div>
-                  <div style={{fontSize:11,fontWeight:600,color:dirColor(i.direction)}}>{i.direction==="up"?"^":"v"} {i.pct&&Math.abs(i.pct).toFixed(2)}%</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
-              <div style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver,background:C.greenBg}}>
-                <div style={{fontSize:11,fontWeight:600,color:C.green,letterSpacing:1,textTransform:"uppercase"}}>^ Risers</div>
-              </div>
-              {risers.map(r=>(
-                <div key={r.ticker} style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver}}>
-                  <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:12,fontWeight:700,color:C.navy}}>{r.ticker}</div>
-                  <div style={{fontSize:10,color:C.faint,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
-                  <div style={{fontSize:12,fontWeight:600,color:C.green}}>+{Math.abs(r.pct).toFixed(2)}%</div>
-                </div>
-              ))}
-            </div>
-            <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,overflow:"hidden"}}>
-              <div style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver,background:C.redBg}}>
-                <div style={{fontSize:11,fontWeight:600,color:C.red,letterSpacing:1,textTransform:"uppercase"}}>v Fallers</div>
-              </div>
-              {fallers.map(r=>(
-                <div key={r.ticker} style={{padding:"9px 12px",borderBottom:"0.5px solid "+C.silver}}>
-                  <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:12,fontWeight:700,color:C.navy}}>{r.ticker}</div>
-                  <div style={{fontSize:10,color:C.faint,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
-                  <div style={{fontSize:12,fontWeight:600,color:C.red}}>{r.pct.toFixed(2)}%</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{background:C.navy,borderRadius:10,padding:16}}>
-            <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>FX rates {marketStatus!=="static"&&<span style={{color:C.teal,fontSize:10}}>. Live</span>}</div>
-            {fxRates.map(f=>(
-              <div key={f.pair} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
-                <span style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>{f.pair}</span>
-                <div style={{display:"flex",gap:8}}>
-                  <span style={{fontFamily:"Space Grotesk,sans-serif",fontSize:13,fontWeight:600,color:C.white}}>{fmt(f.rate,4)}</span>
-                  <span style={{fontSize:11,color:f.change>= 0 ?"#34D399":"#F87171"}}>{f.change>= 0 ?"+":""}{fmt(f.change,4)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
 const Connect=()=>{
   const [connected,setConnected]=useState(["bloomberg"]);
   const [showModal,setShowModal]=useState(null);
@@ -2074,6 +2052,8 @@ const Connect=()=>{
     {id:"docusign",name:"DocuSign",category:"Documents",desc:"Electronic signatures and document workflow automation.",icon:"D"},
     {id:"xero",name:"Xero",category:"Accounting",desc:"Accounting and invoicing integration for fee management.",icon:"H"},
     {id:"sendgrid",name:"SendGrid",category:"Email",desc:"Bulk and transactional email for client communications.",icon:"@"},
+    {id:"onedrive",name:"OneDrive / Excel",category:"Data Sources",desc:"Connect client data, holdings, transactions and distributions from Excel files hosted on OneDrive or SharePoint.",icon:"X"},
+    {id:"sharepoint",name:"SharePoint",category:"Data Sources",desc:"Import and sync data from SharePoint lists and document libraries.",icon:"S"},
   ];
   const cats=[...new Set(apps.map(a=>a.category))];
   return(
@@ -2160,423 +2140,6 @@ const buildPortfolioContext = (selectedClient) => {
   return "You are an AI portfolio assistant for i-Convergence, a financial platform management system. You have access to the following live client portfolio data:\n\n"+clientSummaries+focusNote+"\nFX rates: GBP/USD 1.2618, GBP/EUR 1.1603, USD/CNY 7.24.\nToday\'s date: "+new Date().toLocaleDateString("en-GB")+".\nProvide concise, professional financial analysis. Always note that insights are for adviser reference only and not investment advice.";
 };
 
-const AIAssistant = ({ selectedCcy, selectedClient }) => {
-  const isMobile = useIsMobile();
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hello! I am your i-Convergence AI Portfolio Assistant. I have full context of all client portfolios, holdings, P&L, and FX rates. Ask me anything about your book of business, market outlook, or specific client concerns." }
-  ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const messagesEndRef = { current: null };
-
-  const send = async (text) => {
-    const msg = text || input.trim();
-    if (!msg) return;
-    const newMessages = [...messages, { role: "user", content: msg }];
-    setMessages(newMessages);
-    setInput("");
-    setLoading(true);
-
-    if (!ANTHROPIC_API_KEY) {
-      setMessages([...newMessages, { role: "assistant", content: "To activate the AI assistant, paste your Anthropic API key into the ANTHROPIC_API_KEY constant in the source code (search for 'sk-ant'). You can get a key at console.anthropic.com." }]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          system: buildPortfolioContext(selectedClient),
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-        }),
-      });
-      const data = await response.json();
-      const reply = (data.content && data.content[0] && data.content[0].text) || "Sorry, I could not generate a response. Please try again.";
-      setMessages([...newMessages, { role: "assistant", content: reply }]);
-    } catch (err) {
-      setMessages([...newMessages, { role: "assistant", content: "Connection error. Please check your network and try again." }]);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div style={{ padding: isMobile ? "12px 10px" : 24, display: "flex", flexDirection: "column", height: "calc(100vh - 54px)" }}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>AI powered</div>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 600, color: C.navy }}>Portfolio assistant</div>
-      </div>
-
-      {!ANTHROPIC_API_KEY && (
-        <div style={{ background: C.amberBg, border: "1px solid " + C.gold, borderRadius: 10, padding: "12px 16px", marginBottom: 14, fontSize: 13, color: C.amber }}>
-          <strong>Setup required:</strong> Add your Anthropic API key to the <code>ANTHROPIC_API_KEY</code> constant in the source code to activate AI responses.
-        </div>
-      )}
-
-      <div style={{ flex: 1, overflowY: "auto", background: C.silver, borderRadius: 10, padding: 16, marginBottom: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-        {messages.map((m, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{
-              maxWidth: "80%", padding: "10px 14px", borderRadius: m.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
-              background: m.role === "user" ? C.navy : C.white,
-              color: m.role === "user" ? C.white : C.text,
-              fontSize: 13, lineHeight: 1.6,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
-            }}>
-              {m.content}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
-            <div style={{ background: C.white, padding: "10px 14px", borderRadius: "12px 12px 12px 4px", fontSize: 13, color: C.faint }}>
-              Analysing portfolios...
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ marginBottom: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {SUGGESTED_PROMPTS.slice(0, isMobile ? 2 : 4).map((p, i) => (
-          <button key={i} onClick={() => send(p)} style={{ background: C.white, border: "0.5px solid " + C.silver, borderRadius: 20, padding: "5px 12px", fontSize: 11, color: C.text, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-            {p}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-          placeholder="Ask about portfolios, markets, rebalancing, risk..."
-          style={{ flex: 1, padding: "10px 14px", border: "1.5px solid " + C.silverMid, borderRadius: 8, fontSize: 13, fontFamily: "'Inter',sans-serif", outline: "none" }}
-        />
-        <Btn onClick={() => send()} variant="primary">{loading ? "..." : "Send"}</Btn>
-      </div>
-    </div>
-  );
-};
-
-// --- RISK & SUITABILITY PAGE ----------------------------------------
-const RiskPage = ({ selectedCcy, setSection, setSelectedClient }) => {
-  const isMobile = useIsMobile();
-  const sym = CCY_SYMBOLS[selectedCcy] || "$";
-  const [profiles, setProfiles] = useState(DEFAULT_RISK_PROFILES);
-  const [editing, setEditing] = useState(null);
-  const [editScore, setEditScore] = useState(5);
-  const [editNotes, setEditNotes] = useState("");
-
-  const saveProfile = () => {
-    setProfiles({ ...profiles, [editing]: { ...profiles[editing], score: editScore, notes: editNotes, reviewed: new Date().toISOString().slice(0, 10) } });
-    setEditing(null);
-  };
-
-  return (
-    <div style={{ padding: isMobile ? "12px 10px" : 24 }}>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Compliance</div>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 600, color: C.navy }}>Risk and suitability</div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 14 }}>
-        {CLIENTS.map(client => {
-          const profile = profiles[client.id] || DEFAULT_RISK_PROFILES[client.id];
-          const score = (profile && profile.score) || 5;
-          const comp = computeCompliance(client.id, profiles);
-          const hasFlags = comp && comp.flags && comp.flags.length > 0;
-          const colour = RISK_COLOURS[score] || C.teal;
-
-          return (
-            <div key={client.id} style={{ background: C.white, border: "0.5px solid " + (hasFlags ? C.gold : C.silver), borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ background: C.navy, padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 600, color: C.white }}>{client.name}</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>{client.id}</div>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {hasFlags && <Badge color="warning">{comp.flags.length} flag{comp.flags.length !== 1 ? "s" : ""}</Badge>}
-                  <Btn small variant="ghost" onClick={() => { setEditing(client.id); setEditScore(score); setEditNotes((profile && profile.notes) || ""); }}>Edit profile</Btn>
-                </div>
-              </div>
-              <div style={{ padding: "16px 18px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "12px 18px", marginBottom: 14 }}>
-                  <div style={{ width: 52, height: 52, borderRadius: "50%", background: colour, display: "flex", alignItems: "center", justifyContent: "center", color: C.white, fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 700 }}>
-                    {score}
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 600, color: C.navy }}>{RISK_LABELS[score] || "Custom"}</div>
-                    <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>Mandate: Equity {RISK_MANDATES[score].equity[0]}-{RISK_MANDATES[score].equity[1]}% . FI {RISK_MANDATES[score].fi[0]}-{RISK_MANDATES[score].fi[1]}%</div>
-                    <div style={{ fontSize: 11, color: C.faint }}>Reviewed: {(profile && profile.reviewed) || "Never"}</div>
-                  </div>
-                </div>
-
-                {comp && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Current allocation</div>
-                    {[["Equity", comp.eqPct, RISK_MANDATES[score].equity], ["Fixed Income", comp.fiPct, RISK_MANDATES[score].fi], ["Cash", comp.cashPct, RISK_MANDATES[score].cash], ["Commodity", comp.comPct, RISK_MANDATES[score].commodity]].map(([label, val, range]) => {
-                      const breach = val < range[0] || val > range[1];
-                      return (
-                        <div key={label} style={{ marginBottom: 6 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-                            <span style={{ color: breach ? C.red : C.text, fontWeight: breach ? 600 : 400 }}>{label}</span>
-                            <span style={{ color: breach ? C.red : C.faint }}>{val}% <span style={{ color: C.faint }}>(mandate: {range[0]}-{range[1]}%)</span></span>
-                          </div>
-                          <div style={{ height: 5, background: C.silver, borderRadius: 3 }}>
-                            <div style={{ height: "100%", width: Math.min(val, 100) + "%", background: breach ? C.red : colour, borderRadius: 3, transition: "width 0.4s" }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, fontStyle: "italic", marginBottom: 12 }}>
-                  {(profile && profile.notes) || "No suitability notes recorded."}
-                </div>
-
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Compliance flags</div>
-                {comp && comp.flags && comp.flags.length === 0 && (
-                  <div style={{ color: C.green, fontSize: 13, fontWeight: 500, display: "flex", gap: 6, alignItems: "center" }}><span>OK</span><span>No breaches detected</span></div>
-                )}
-                {comp && comp.flags && comp.flags.length > 0 && comp.flags.map((f, fi) => (
-                  <div key={fi} style={{ display: "flex", gap: 8, marginBottom: 8, padding: "8px 10px", background: f.type === "error" ? C.redBg : C.amberBg, borderRadius: 6 }}>
-                    <span style={{ flexShrink: 0 }}>{f.type === "error" ? "●" : "●"}</span>
-                    <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{f.msg}</span>
-                  </div>
-                ))}
-                {!comp && (
-                  <div style={{ fontSize: 12, color: C.faint }}>No compliance data available.</div>
-                )}
-
-                <div style={{ marginTop: 12, display: "flex", gap: 7 }}>
-                  <Btn small variant="ghost" onClick={() => { setSelectedClient(client.id); setSection("clients"); }}>View client</Btn>
-                  <Btn small variant="secondary" onClick={() => setSection("rebalance")}>Rebalance</Btn>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {editing && (
-        <Modal title="Edit risk profile" onClose={() => setEditing(null)}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, color: C.navy, marginBottom: 14 }}>
-            {(CLIENTS.find(c => c.id === editing) || {name: editing}).name}
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Risk score: <strong>{editScore} -- {RISK_LABELS[editScore]}</strong></label>
-            <input type="range" min={1} max={10} value={editScore} onChange={e => setEditScore(+e.target.value)} style={{ width: "100%" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.faint, marginTop: 4 }}>
-              <span>1 Very Cautious</span><span>5 Moderate</span><span>10 Speculative</span>
-            </div>
-          </div>
-          <div style={{ background: C.silver, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.text, marginBottom: 14 }}>
-            Mandate: Equity {RISK_MANDATES[editScore].equity[0]}-{RISK_MANDATES[editScore].equity[1]}% . Fixed Income {RISK_MANDATES[editScore].fi[0]}-{RISK_MANDATES[editScore].fi[1]}% . Cash max {RISK_MANDATES[editScore].cash[1]}%
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: C.text, display: "block", marginBottom: 4 }}>Suitability notes</label>
-            <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={4}
-              style={{ width: "100%", padding: "8px 11px", border: "1.5px solid " + C.silverMid, borderRadius: 6, fontSize: 13, fontFamily: "'Inter',sans-serif", resize: "vertical", boxSizing: "border-box" }} />
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <Btn variant="secondary" onClick={() => setEditing(null)}>Cancel</Btn>
-            <Btn onClick={saveProfile}>Save profile</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-};
-
-// --- REBALANCING TOOL -----------------------------------------------
-const RebalancePage = ({ selectedCcy }) => {
-  const isMobile = useIsMobile();
-  const sym = CCY_SYMBOLS[selectedCcy] || "$";
-  const [selectedId, setSelectedId] = useState(CLIENTS[0].id);
-
-  const client = CLIENTS.find(c => c.id === selectedId);
-  const hs = HOLDINGS[selectedId] || [];
-  const profile = DEFAULT_RISK_PROFILES[selectedId];
-  const score = (profile && profile.score) || 5;
-  const mandate = RISK_MANDATES[score];
-  const total = hs.reduce((s, h) => s + convertAmount(h.value, h.ccy, selectedCcy), 0);
-
-  const byClass = {};
-  hs.forEach(h => {
-    const ac = ASSET_CLASS[h.ticker] || "Other";
-    byClass[ac] = (byClass[ac] || 0) + convertAmount(h.value, h.ccy, selectedCcy);
-  });
-
-  const targetMid = ac => {
-    const m = mandate[ac.toLowerCase().replace(" ", "")] || mandate[ac.toLowerCase()];
-    if (!m) return 0;
-    return (m[0] + m[1]) / 2 / 100;
-  };
-
-  const classes = ["Equity", "Fixed Income", "Cash", "Commodity"];
-  const trades = [];
-  classes.forEach(ac => {
-    const current = byClass[ac] || 0;
-    const target = total * targetMid(ac);
-    const diff = target - current;
-    if (Math.abs(diff) > 500) {
-      trades.push({ ac, current, target, diff, pctCurrent: Math.round(current / total * 100), pctTarget: Math.round(targetMid(ac) * 100) });
-    }
-  });
-
-  const exportTrades = () => {
-    const nl = "\n";
-    const rows = trades.map(t => [t.ac, t.pctCurrent + "%", t.pctTarget + "%", (t.diff >= 0 ? "BUY" : "SELL"), sym + Math.abs(Math.round(t.diff)).toLocaleString()].join(",")).join(nl);
-    const blob = new Blob(["Asset Class,Current %,Target %,Action,Amount" + nl + rows], { type: "text/csv" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "rebalance-" + selectedId + ".csv"; a.click();
-  };
-
-  return (
-    <div style={{ padding: isMobile ? "12px 10px" : 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Tools</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 600, color: C.navy }}>Rebalancing tool</div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <select value={selectedId} onChange={e => setSelectedId(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid " + C.silver, borderRadius: 7, fontSize: 13, fontFamily: "'Inter',sans-serif", color: C.navy, background: C.white }}>
-            {CLIENTS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          {trades.length > 0 && <Btn small onClick={exportTrades}>Export CSV</Btn>}
-        </div>
-      </div>
-
-      <div style={{ background: C.navy, borderRadius: 10, padding: "16px 20px", marginBottom: 16, display: "flex", gap: 24, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 3 }}>Client</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 600, color: C.white }}>{client && client.name}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 3 }}>Risk profile</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 600, color: C.teal }}>{score} -- {RISK_LABELS[score]}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 3 }}>Portfolio value</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 600, color: C.white }}>{sym}{fmt(total, 0)}</div>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
-        <div style={{ background: C.white, border: "0.5px solid " + C.silver, borderRadius: 10, padding: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Current vs target allocation</div>
-          {classes.map(ac => {
-            const cur = Math.round((byClass[ac] || 0) / total * 100);
-            const tgt = Math.round(targetMid(ac) * 100);
-            const breach = cur < (mandate[ac.toLowerCase().replace(" ", "")] || [0, 100])[0] || cur > (mandate[ac.toLowerCase().replace(" ", "")] || [0, 100])[1];
-            return (
-              <div key={ac} style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 500, color: C.navy }}>{ac}</span>
-                  <span style={{ color: breach ? C.red : C.faint }}>{cur}% <span style={{ color: C.teal }}>&gt;</span> {tgt}%</span>
-                </div>
-                <div style={{ position: "relative", height: 8, background: C.silver, borderRadius: 4 }}>
-                  <div style={{ position: "absolute", height: "100%", width: cur + "%", background: breach ? C.red : C.navyMid, borderRadius: 4 }} />
-                  <div style={{ position: "absolute", height: "100%", width: 2, left: tgt + "%", background: C.teal, borderRadius: 1 }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.faint, marginTop: 2 }}>
-                  <span>Current: {sym}{fmt((byClass[ac] || 0), 0)}</span>
-                  <span>Target: {sym}{fmt(total * targetMid(ac), 0)}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div style={{ background: C.white, border: "0.5px solid " + C.silver, borderRadius: 10, padding: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Recommended trades</div>
-          {trades.length === 0 ? (
-            <div style={{ color: C.green, fontSize: 13, fontWeight: 500, display: "flex", gap: 6, alignItems: "center", padding: "20px 0" }}>
-              <span>OK</span><span>Portfolio is within mandate -- no rebalancing required</span>
-            </div>
-          ) : trades.map((t, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: t.diff >= 0 ? C.greenBg : C.redBg, borderRadius: 8, marginBottom: 8 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.navy }}>{t.ac}</div>
-                <div style={{ fontSize: 11, color: C.faint }}>{t.pctCurrent}% &gt; {t.pctTarget}%</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <Badge color={t.diff >= 0 ? "success" : "error"}>{t.diff >= 0 ? "BUY" : "SELL"}</Badge>
-                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 700, color: t.diff >= 0 ? C.green : C.red, marginTop: 4 }}>
-                  {sym}{fmt(Math.abs(t.diff), 0)}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- ALERTS PAGE ----------------------------------------------------
-const AlertsPage = ({ setSection, setSelectedClient }) => {
-  const isMobile = useIsMobile();
-  const [alerts, setAlerts] = useState(buildDefaultAlerts());
-  const [filter, setFilter] = useState("open");
-
-  const dismiss = (id) => setAlerts(alerts.map(a => a.id === id ? { ...a, status: "dismissed" } : a));
-  const filtered = filter === "all" ? alerts : alerts.filter(a => a.status === filter);
-  const openCount = alerts.filter(a => a.status === "open").length;
-
-  return (
-    <div style={{ padding: isMobile ? "12px 10px" : 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3, color: C.teal, textTransform: "uppercase", marginBottom: 3 }}>Monitoring</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 600, color: C.navy, display: "flex", alignItems: "center", gap: 10 }}>
-            Alerts
-            {openCount > 0 && <span style={{ background: C.redBg, color: C.red, fontSize: 13, fontWeight: 700, padding: "2px 10px", borderRadius: 100 }}>{openCount} open</span>}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {[["open", "Open"], ["dismissed", "Dismissed"], ["all", "All"]].map(([k, l]) => (
-          <button key={k} onClick={() => setFilter(k)} style={{ background: filter === k ? C.navy : C.white, color: filter === k ? C.white : C.text, border: "0.5px solid " + (filter === k ? C.navy : C.silver), borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer", fontFamily: "'Inter',sans-serif", fontWeight: filter === k ? 600 : 400 }}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {filtered.length === 0 ? (
-          <div style={{ background: C.white, border: "0.5px solid " + C.silver, borderRadius: 10, padding: 40, textAlign: "center" }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>OK</div>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 600, color: C.navy }}>No alerts</div>
-          </div>
-        ) : filtered.map(alert => (
-          <div key={alert.id} style={{ background: C.white, border: "0.5px solid " + (alert.severity === "error" ? "#FCA5A5" : alert.severity === "warning" ? "#FCD34D" : C.silver), borderRadius: 10, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, opacity: alert.status === "dismissed" ? 0.5 : 1 }}>
-            <div style={{ display: "flex", gap: 12, flex: 1 }}>
-              <div style={{ fontSize: 20, flexShrink: 0 }}>{alert.severity === "error" ? "●" : alert.severity === "warning" ? "●" : "o"}</div>
-              <div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
-                  <Badge color={alert.severity === "error" ? "error" : alert.severity === "warning" ? "warning" : "info"}>{alert.type}</Badge>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>{alert.client}</span>
-                </div>
-                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, marginBottom: 6 }}>{alert.msg}</div>
-                <div style={{ fontSize: 11, color: C.faint }}>Triggered {alert.triggered}</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-              <Btn small variant="ghost" onClick={() => { setSelectedClient(alert.clientId); setSection("clients"); }}>View client</Btn>
-              {alert.status === "open" && <Btn small variant="secondary" onClick={() => dismiss(alert.id)}>Dismiss</Btn>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// --- DOCUMENT VAULT -------------------------------------------------
 const DocVaultPage = () => {
   const isMobile = useIsMobile();
   const [docs, setDocs] = useState(() => {
@@ -3179,282 +2742,6 @@ const UserManagement = ({ user }) => {
 
 
 // --- TRUSTEE DASHBOARD --------------------------------------------------------
-const TrusteePage = () => {
-  const isMobile = useIsMobile();
-  const [quarter, setQuarter] = useState("Q2 2026");
-  const [editMode, setEditMode] = useState(false);
-
-  // All metrics are editable so the trustee can update them each quarter
-  const [metrics, setMetrics] = useState({
-    // Membership
-    activeMembers:   4128,
-    deferredMembers: 8762,
-    pensioners:      5331,
-    // Funding
-    fundingRatio:    98.4,
-    buyoutFunding:   85.1,
-    schemeAssets:    842,
-    monthlyCashflow: 1.2,
-    // Admin SLAs
-    retirementsSLA:  97.2,
-    transfersSLA:    94.6,
-    deathsSLA:       99.1,
-    queriesSLA:      96.4,
-    openCases:       327,
-    cases30:         41,
-    cases90:         6,
-    // Data integrity
-    commonData:      98.7,
-    conditionalData: 94.3,
-    missingAddress:  74,
-    missingNI:       18,
-    duplicates:      4,
-    // Risk & governance
-    auditActions:    3,
-    regBreaches:     0,
-    cyberIncidents:  0,
-    criticalRisks:   1,
-    // Overall score
-    healthScore:     91,
-  });
-
-  const [draft, setDraft] = useState({...metrics});
-
-  const rag = (val, green, amber) => {
-    if (val >= green) return { colour: C.green, icon: "✓" };
-    if (val >= amber) return { colour: C.amber, icon: "o" };
-    return { colour: C.red, icon: "●" };
-  };
-  const ragLow = (val, redAbove, amberAbove) => {
-    if (val === 0) return { colour: C.green, icon: "✓" };
-    if (val <= amberAbove) return { colour: C.amber, icon: "o" };
-    return { colour: C.red, icon: "●" };
-  };
-
-  const totalMembers = metrics.activeMembers + metrics.deferredMembers + metrics.pensioners;
-  const healthRag = rag(metrics.healthScore, 90, 75);
-
-  const saveEdits = () => { setMetrics({...draft}); setEditMode(false); };
-  const cancelEdits = () => { setDraft({...metrics}); setEditMode(false); };
-
-  const Num = ({ field, prefix="", suffix="", dp=0 }) => editMode ? (
-    <input
-      type="number"
-      value={draft[field]}
-      onChange={e => setDraft({...draft, [field]: parseFloat(e.target.value)||0})}
-      style={{width:80,padding:"2px 6px",border:"1.5px solid "+C.teal,borderRadius:4,fontSize:14,fontFamily:"Space Grotesk,sans-serif",fontWeight:600,color:C.navy,textAlign:"right"}}
-    />
-  ) : (
-    <span style={{fontFamily:"Space Grotesk,sans-serif",fontSize:22,fontWeight:700,color:C.navy,letterSpacing:-0.5}}>
-      {prefix}{typeof metrics[field]==="number"&&dp=== 0 ?metrics[field].toLocaleString():metrics[field].toFixed(dp)}{suffix}
-    </span>
-  );
-
-  const SectionHeader = ({ title }) => (
-    <div style={{display:"flex",alignItems:"center",gap:12,margin:"20px 0 14px",paddingTop:20,borderTop:"1px solid "+C.silver}}>
-      <div style={{height:2,width:20,background:C.teal,borderRadius:1,flexShrink:0}}/>
-      <div style={{fontSize:10,fontWeight:700,letterSpacing:3,color:C.faint,textTransform:"uppercase"}}>{title}</div>
-      <div style={{flex:1,height:1,background:C.silver}}/>
-    </div>
-  );
-
-  const KPI = ({ label, field, prefix="", suffix="", greenAt, amberAt, ragType="high", dp=0, wide=false }) => {
-    const val = editMode ? draft[field] : metrics[field];
-    const r = ragType==="high" ? rag(val, greenAt, amberAt) : ragLow(val, amberAt, greenAt);
-    return (
-      <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px",minWidth:wide?200:0}}>
-        <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>{label}</div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-          <Num field={field} prefix={prefix} suffix={suffix} dp={dp}/>
-          <span style={{fontSize:20}}>{r.icon}</span>
-        </div>
-        <div style={{marginTop:6,height:3,background:C.silver,borderRadius:2}}>
-          <div style={{height:"100%",width:Math.min(val,100)+"%",background:r.colour,borderRadius:2,transition:"width 0.5s"}}/>
-        </div>
-      </div>
-    );
-  };
-
-  const StatItem = ({ label, field, prefix="", suffix="", ragType, greenAt, amberAt, dp=0 }) => {
-    const val = editMode ? draft[field] : metrics[field];
-    const r = ragType==="high" ? rag(val, greenAt||100, amberAt||95)
-            : ragType==="low"  ? ragLow(val, amberAt||1, greenAt||5)
-            : null;
-    return (
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"0.5px solid "+C.silver}}>
-        <span style={{fontSize:13,color:C.text}}>{label}</span>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {editMode ? (
-            <input type="number" value={draft[field]}
-              onChange={e=>setDraft({...draft,[field]:parseFloat(e.target.value)||0})}
-              style={{width:72,padding:"2px 6px",border:"1.5px solid "+C.teal,borderRadius:4,fontSize:13,fontFamily:"Space Grotesk,sans-serif",fontWeight:600,color:C.navy,textAlign:"right"}}/>
-          ) : (
-            <span style={{fontFamily:"Space Grotesk,sans-serif",fontSize:15,fontWeight:600,color:C.navy}}>
-              {prefix}{dp> 0 ?val.toFixed(dp):typeof val==="number"?val.toLocaleString():val}{suffix}
-            </span>
-          )}
-          {r&&<span style={{fontSize:16}}>{r.icon}</span>}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div style={{padding:isMobile?"12px 10px":24,maxWidth:1100,margin:"0 auto"}}>
-      <div style={{background:C.navy,borderRadius:12,padding:isMobile?"18px 16px":"22px 28px",marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:14}}>
-        <div>
-          <div style={{fontSize:10,fontWeight:600,letterSpacing:3,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",marginBottom:6}}>Pension scheme executive dashboard</div>
-          <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:isMobile?22:28,fontWeight:700,color:C.white,letterSpacing:-0.5}}>
-            Trustee reporting
-          </div>
-          <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            {editMode ? (
-              <input value={draft.quarter||quarter} onChange={e=>setQuarter(e.target.value)}
-                style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,padding:"4px 10px",color:C.white,fontSize:13,fontFamily:"'Inter',sans-serif"}}/>
-            ) : (
-              <span style={{background:"rgba(0,184,176,0.2)",color:C.teal,fontSize:13,fontWeight:600,padding:"4px 12px",borderRadius:20}}>{quarter}</span>
-            )}
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{fontSize:36}}>{healthRag.icon}</div>
-              <div>
-                <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:28,fontWeight:700,color:C.white,lineHeight:1}}>
-                  {editMode?(
-                    <input type="number" value={draft.healthScore}
-                      onChange={e=>setDraft({...draft,healthScore:parseFloat(e.target.value)||0})}
-                      style={{width:60,background:"transparent",border:"none",borderBottom:"1px solid "+C.teal,color:C.white,fontSize:28,fontFamily:"Space Grotesk,sans-serif",fontWeight:700}}/>
-                  ):metrics.healthScore} / 100
-                </div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>Overall health score</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-          {editMode ? (
-            <>
-              <Btn small variant="ghost" onClick={cancelEdits}>Cancel</Btn>
-              <Btn small onClick={saveEdits}>Save changes</Btn>
-            </>
-          ) : (
-            <Btn small variant="ghost" onClick={()=>{setDraft({...metrics});setEditMode(true);}}>Edit Edit metrics</Btn>
-          )}
-        </div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16,marginBottom:4}}>
-        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:12,padding:"18px 20px"}}>
-          <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.teal,marginBottom:14}}>Membership</div>
-          <StatItem label="Active members"   field="activeMembers"/>
-          <StatItem label="Deferred members" field="deferredMembers"/>
-          <StatItem label="Pensioners"       field="pensioners"/>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",marginTop:4}}>
-            <span style={{fontSize:13,fontWeight:600,color:C.navy}}>Total members</span>
-            <span style={{fontFamily:"Space Grotesk,sans-serif",fontSize:18,fontWeight:700,color:C.navy}}>{totalMembers.toLocaleString()}</span>
-          </div>
-        </div>
-        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:12,padding:"18px 20px"}}>
-          <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.teal,marginBottom:14}}>Funding</div>
-          <StatItem label="Funding ratio"    field="fundingRatio"   suffix="%"  ragType="high" greenAt={95}  amberAt={85} dp={1}/>
-          <StatItem label="Buyout funding"   field="buyoutFunding"  suffix="%"  ragType="high" greenAt={90}  amberAt={80} dp={1}/>
-          <StatItem label="Scheme assets"    field="schemeAssets"   prefix="GBP"  suffix="m"     dp={0}/>
-          <StatItem label="Monthly cashflow" field="monthlyCashflow" prefix={metrics.monthlyCashflow>= 0 ?"+GBP":"GBP"} suffix="m" dp={1}/>
-        </div>
-      </div>
-
-      <SectionHeader title="Administration performance"/>
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:16}}>
-        <KPI label="Retirements SLA" field="retirementsSLA" suffix="%" greenAt={96} amberAt={90} dp={1}/>
-        <KPI label="Transfers SLA"   field="transfersSLA"  suffix="%" greenAt={96} amberAt={90} dp={1}/>
-        <KPI label="Deaths SLA"      field="deathsSLA"     suffix="%" greenAt={96} amberAt={90} dp={1}/>
-        <KPI label="Member queries SLA" field="queriesSLA" suffix="%" greenAt={96} amberAt={90} dp={1}/>
-      </div>
-      <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 18px",marginBottom:4}}>
-        <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Open cases</div>
-        <StatItem label="Open cases total"  field="openCases"/>
-        <StatItem label="Cases > 30 days"   field="cases30"  ragType="low" greenAt={5}  amberAt={20}/>
-        <StatItem label="Cases > 90 days"   field="cases90"  ragType="low" greenAt={0}  amberAt={3}/>
-      </div>
-
-      <SectionHeader title="Data integrity"/>
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(2,1fr)",gap:10,marginBottom:10}}>
-        <KPI label="Common data score"      field="commonData"      suffix="%" greenAt={97} amberAt={92} dp={1}/>
-        <KPI label="Conditional data score" field="conditionalData" suffix="%" greenAt={96} amberAt={90} dp={1}/>
-      </div>
-      <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 18px",marginBottom:4}}>
-        <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Data issues</div>
-        <StatItem label="Missing addresses"  field="missingAddress" ragType="low" greenAt={0} amberAt={50}/>
-        <StatItem label="Missing NI numbers" field="missingNI"      ragType="low" greenAt={0} amberAt={20}/>
-        <StatItem label="Duplicate records"  field="duplicates"     ragType="low" greenAt={0} amberAt={2}/>
-      </div>
-
-      <SectionHeader title="Risk and Governance"/>
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
-          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Open audit actions</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <Num field="auditActions"/>
-            <span style={{fontSize:20}}>{ragLow(metrics.auditActions,5,2).icon}</span>
-          </div>
-        </div>
-        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
-          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Regulatory breaches</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <Num field="regBreaches"/>
-            <span style={{fontSize:20}}>{ragLow(metrics.regBreaches,1,0).icon}</span>
-          </div>
-        </div>
-        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
-          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Cyber incidents</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <Num field="cyberIncidents"/>
-            <span style={{fontSize:20}}>{ragLow(metrics.cyberIncidents,1,0).icon}</span>
-          </div>
-        </div>
-        <div style={{background:C.white,border:"0.5px solid "+C.silver,borderRadius:10,padding:"14px 16px"}}>
-          <div style={{fontSize:10,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",color:C.faint,marginBottom:8}}>Critical risks</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <Num field="criticalRisks"/>
-            <span style={{fontSize:20}}>{ragLow(metrics.criticalRisks,1,0).icon}</span>
-          </div>
-        </div>
-      </div>
-      <div style={{background:C.navy,borderRadius:12,padding:"20px 24px"}}>
-        <div style={{fontSize:11,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginBottom:12}}>Overall trustee health score</div>
-        <div style={{display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
-          <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:isMobile?36:48,fontWeight:700,color:C.white,letterSpacing:-1,lineHeight:1}}>
-            {editMode?(
-              <input type="number" value={draft.healthScore}
-                onChange={e=>setDraft({...draft,healthScore:parseFloat(e.target.value)||0})}
-                style={{width:100,background:"transparent",border:"none",borderBottom:"2px solid "+C.teal,color:C.white,fontSize:isMobile?36:48,fontFamily:"Space Grotesk,sans-serif",fontWeight:700,outline:"none"}}/>
-            ):metrics.healthScore}
-            <span style={{fontSize:isMobile?18:24,color:"rgba(255,255,255,0.4)",marginLeft:4}}>{"/100"}</span>
-          </div>
-          <div style={{flex:1,minWidth:200}}>
-            <div style={{height:12,background:"rgba(255,255,255,0.1)",borderRadius:6,overflow:"hidden",marginBottom:8}}>
-              <div style={{height:"100%",width:metrics.healthScore+"%",background:healthRag.colour,borderRadius:6,transition:"width 0.8s ease"}}/>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"rgba(255,255,255,0.3)"}}>
-              <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
-            </div>
-          </div>
-          <div style={{fontSize:36}}>{healthRag.icon}</div>
-          <div>
-            <div style={{fontFamily:"Space Grotesk,sans-serif",fontSize:16,fontWeight:600,color:healthRag.colour}}>
-              {metrics.healthScore>=90 ?"Excellent":metrics.healthScore>=75 ?"Good":metrics.healthScore>=60 ?"Fair":"Needs attention"}
-            </div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:2}}>{quarter} assessment</div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{marginTop:16,fontSize:11,color:C.faint,textAlign:"center",lineHeight:1.8}}>
-        Trustee dashboard . {quarter} . Click <strong>Edit Edit metrics</strong> to update figures each quarter<br/>
-        All RAG statuses are automatically calculated from the values entered
-      </div>
-    </div>
-  );
-};
-
-
 export default function App(){
   const {user,loading,error,login,logout} = useAuth();
   const [section,setSection]=useState("dashboard");
@@ -3507,13 +2794,11 @@ export default function App(){
       <div style={{flex:1,overflowY:"auto",paddingBottom:isMobile?68:0}}>
         {section==="dashboard"&&<Dashboard setSection={handleSection} setSelectedClient={setSelectedClient} selectedCcy={selectedCcy}/>}
         {section==="clients"&&<ClientsList selectedClient={selectedClient} setSelectedClient={setSelectedClient} selectedCcy={selectedCcy} setPreviewClientId={setPreviewClientId}/>}
-        {section==="alerts"&&<AlertsPage setSection={handleSection} setSelectedClient={setSelectedClient}/>}
         {section==="pricing"&&<Pricing selectedCcy={selectedCcy}/>}
-        {section==="ai"&&<AIAssistant selectedCcy={selectedCcy} selectedClient={selectedClient}/>}
-        {section==="news"&&<News/>}
+        {section==="risk"&&<RiskPage selectedCcy={selectedCcy} setSection={handleSection} setSelectedClient={setSelectedClient}/>}
+        {section==="withdrawals"&&<WithdrawalsPage/>}
         {section==="connect"&&<Connect/>}
         {section==="users"&&<UserManagement user={user}/>}
-        {section==="trustee"&&<TrusteePage/>}
       </div>
     </div>
   );
